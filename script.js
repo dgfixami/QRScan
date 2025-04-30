@@ -9,8 +9,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const scanName = document.getElementById('scan-name');
     const scanCompany = document.getElementById('scan-company');
     const scanEmail = document.getElementById('scan-email'); // Will be unused but keep reference to avoid errors
-    const scanStatus = document.getElementById('scan-status');
-    const statusValue = document.getElementById('status-value');
+    const checkinStatus = document.getElementById('checkin-status');
+    const checkinStatusValue = document.getElementById('checkin-status-value');
+    const goodiebagStatus = document.getElementById('goodiebag-status');
+    const goodiebagStatusValue = document.getElementById('goodiebag-status-value');
     
     // Lookup elements
     const lookupCode = document.getElementById('lookup-code');
@@ -334,6 +336,10 @@ document.addEventListener('DOMContentLoaded', function() {
         scanName.textContent = "Loading...";
         scanCompany.textContent = "Loading...";
         
+        // Reset and hide both status elements during loading
+        checkinStatus.classList.add('hidden');
+        goodiebagStatus.classList.add('hidden');
+        
         // Construct URL with parameters
         const url = `${scriptUrl}?code=${encodeURIComponent(code)}`;
         
@@ -352,9 +358,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     // Reset scan result fields if there was an error
                     resetScanResultFields();
-                    scanStatus.classList.remove('hidden');
-                    statusValue.textContent = "Error: " + (data.message || "Attendee not found");
-                    statusValue.className = "error-text";
+                    
+                    // Show error for both statuses
+                    checkinStatus.classList.remove('hidden');
+                    checkinStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
+                    checkinStatusValue.className = "error-text";
+                    
+                    goodiebagStatus.classList.remove('hidden');
+                    goodiebagStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
+                    goodiebagStatusValue.className = "error-text";
                     
                     // Still try to process the scan
                     sendToGoogleSheets(scanData);
@@ -364,9 +376,15 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 resetScanResultFields();
-                scanStatus.classList.remove('hidden');
-                statusValue.textContent = "Error connecting to database";
-                statusValue.className = "error-text";
+                
+                // Show connection error for both statuses
+                checkinStatus.classList.remove('hidden');
+                checkinStatusValue.textContent = "Error connecting to database";
+                checkinStatusValue.className = "error-text";
+                
+                goodiebagStatus.classList.remove('hidden');
+                goodiebagStatusValue.textContent = "Error connecting to database";
+                goodiebagStatusValue.className = "error-text";
                 
                 // Still try to process the scan
                 sendToGoogleSheets(scanData);
@@ -375,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Helper function to update scan result with attendee data
+    // Helper function to update scan result with attendee data - updated to show both statuses
     function updateScanResultWithAttendeeData(data) {
         // Combine first name (name) and last name (email) into a single name field
         const fullName = data.name + ' ' + data.email;
@@ -384,36 +402,52 @@ document.addEventListener('DOMContentLoaded', function() {
         scanName.textContent = fullName;
         scanCompany.textContent = email;  // Company field shows email
         
-        // Show status message based on current mode and previous check-in status
-        scanStatus.classList.remove('hidden');
+        // Show both status elements regardless of current mode
+        checkinStatus.classList.remove('hidden');
+        goodiebagStatus.classList.remove('hidden');
         
+        // Update check-in status
+        if (data.isCheckedIn) {
+            checkinStatusValue.textContent = `Already checked in at ${formatDateTime(data.checkInTime)}`;
+            checkinStatusValue.className = "warning-text";
+        } else {
+            checkinStatusValue.textContent = "Not checked in yet";
+            checkinStatusValue.className = "success-text";
+        }
+        
+        // Update goodie bag status
+        if (data.hasGoodieBag) {
+            goodiebagStatusValue.textContent = `Already received at ${formatDateTime(data.goodieBagTime)}`;
+            goodiebagStatusValue.className = "warning-text";
+        } else {
+            goodiebagStatusValue.textContent = "Not received yet";
+            goodiebagStatusValue.className = "success-text";
+        }
+        
+        // Highlight the current mode status
         if (currentMode === 'Check-in') {
-            if (data.isCheckedIn) {
-                statusValue.textContent = `Already checked in at ${formatDateTime(data.checkInTime)}`;
-                statusValue.className = "warning-text";
-            } else {
-                statusValue.textContent = "First time check-in";
-                statusValue.className = "success-text";
-            }
+            checkinStatus.classList.add('current-mode');
+            goodiebagStatus.classList.remove('current-mode');
         } else { // Goodie Bag mode
-            if (data.hasGoodieBag) {
-                statusValue.textContent = `Already received at ${formatDateTime(data.goodieBagTime)}`;
-                statusValue.className = "warning-text";
-            } else {
-                statusValue.textContent = "First time receiving goodie bag";
-                statusValue.className = "success-text";
-            }
+            checkinStatus.classList.remove('current-mode');
+            goodiebagStatus.classList.add('current-mode');
         }
     }
     
-    // Helper function to reset scan result fields
+    // Helper function to reset scan result fields - updated for dual status
     function resetScanResultFields() {
         scanName.textContent = "-";
         scanCompany.textContent = "-";
         // Remove reference to scanEmail since we're not using it anymore
-        scanStatus.classList.add('hidden');
-        statusValue.textContent = "-";
-        statusValue.className = "";
+        
+        // Reset and hide both statuses
+        checkinStatus.classList.add('hidden');
+        checkinStatusValue.textContent = "-";
+        checkinStatusValue.className = "";
+        
+        goodiebagStatus.classList.add('hidden');
+        goodiebagStatusValue.textContent = "-";
+        goodiebagStatusValue.className = "";
     }
     
     modeToggle.addEventListener('change', function() {
