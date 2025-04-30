@@ -224,7 +224,7 @@ img[alt="Info icon"] {
     font-weight: bold;
 }
 
-/* Add styling for the current mode highlight */
+/* Update styling for the current mode highlight */
 #scan-statuses {
     margin-top: 10px;
     border-top: 1px solid #eee;
@@ -232,12 +232,25 @@ img[alt="Info icon"] {
 }
 
 .scan-status.current-mode {
-    background-color: #f0f7ff;
+    background-color: #fff8e1; /* Amber light background instead of blue */
     padding: 5px 8px;
     border-radius: 4px;
-    border-left: 3px solid #2196F3;
+    border-left: 3px solid #ffc107; /* Amber border */
     margin-left: -8px;
     margin-bottom: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Add subtle shadow */
+    font-weight: bold; /* Make text stand out */
+}
+
+/* Alternative styles for check-in vs goodie bag modes */
+#checkin-status.current-mode {
+    background-color: #e8f5e9; /* Light green background */
+    border-left: 3px solid #4CAF50; /* Green border */
+}
+
+#goodiebag-status.current-mode {
+    background-color: #fff8e1; /* Amber light background */
+    border-left: 3px solid #ffc107; /* Amber border */
 }
 
 /* Clean up some of the scanner UI */
