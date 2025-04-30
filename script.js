@@ -34,8 +34,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // New variable to track if a scan is in process
     let isScanning = false;
     
-    // Google Apps Script web app URL
+    // Google Apps Script web app URLs - one for check-in/goodie bag, one for attendee details
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+    const attendeeApiUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
     
     // Setup lookup button click handler
     if(lookupButton) {
@@ -123,25 +124,86 @@ document.addEventListener('DOMContentLoaded', function() {
         fetchAttendeeData(code);
     }
     
+    // New function to fetch attendee details from the second API
+    function fetchAttendeeDetails(code) {
+        logToPage(`Fetching attendee details for code: ${code}`, 'info');
+        
+        return fetch(`${attendeeApiUrl}?code=${encodeURIComponent(code)}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.message || "Failed to retrieve attendee details");
+                }
+                
+                // Log the actual response for debugging
+                console.log("Attendee API response:", data);
+                
+                // Format name from firstname and lastname fields
+                const firstname = data.data.firstname || "";
+                const lastname = data.data.lastname || "";
+                const fullName = [firstname, lastname].filter(Boolean).join(' ');
+                
+                // Log the extracted details
+                logToPage(`Found attendee: ${fullName}`, 'info');
+                
+                return {
+                    name: fullName,
+                    email: data.data.email || "",
+                    code: code
+                };
+            })
+            .catch(error => {
+                logToPage(`Error fetching attendee details: ${error.message}`, 'error');
+                throw error; // Re-throw to be handled by the caller
+            });
+    }
+    
     // Function to fetch attendee data from Google Sheets for manual lookup only
     function fetchAttendeeData(code) {
         // Show that we're loading
         lookupResult.innerHTML = '<div class="loading">Loading...</div>';
         lookupResult.classList.remove('hidden');
         
-        // Construct URL with parameters
-        const url = `${scriptUrl}?code=${encodeURIComponent(code)}`;
-        
-        fetch(url)
+        // First get check-in/goodie bag status from first API
+        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    displayAttendeeData(data.data);
-                    logToPage(`Successfully retrieved data for code: ${code}`, 'success');
-                } else {
-                    showLookupError(data.message || 'Failed to find attendee');
+                if (!data.success) {
+                    showLookupError(data.message || 'Failed to find check-in status');
                     logToPage(`Lookup failed: ${data.message}`, 'error');
+                    return null;
                 }
+                
+                const checkInData = data.data;
+                
+                // Then get attendee details from second API
+                return fetchAttendeeDetails(code)
+                    .then(attendeeDetails => {
+                        // Combine data from both APIs
+                        const combinedData = {
+                            ...checkInData,
+                            name: attendeeDetails.name,
+                            email: attendeeDetails.email
+                        };
+                        
+                        // Display the combined data
+                        displayAttendeeData(combinedData);
+                        logToPage(`Successfully retrieved data for code: ${code}`, 'success');
+                    })
+                    .catch(error => {
+                        // If we can't get attendee details, still show check-in data
+                        displayAttendeeData({
+                            ...checkInData,
+                            name: "Unknown",
+                            email: "Unknown"
+                        });
+                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
+                    });
             })
             .catch(error => {
                 showLookupError('Error connecting to database');
@@ -149,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Function to display attendee data - updated for new data structure
+    // Modified function to display attendee data - updated for new data structure
     function displayAttendeeData(data) {
         // Clear any previous content
         lookupResult.innerHTML = '';
@@ -158,9 +220,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const infoDiv = document.createElement('div');
         infoDiv.className = 'attendee-info';
         
-        // With the new structure, the QR code is the only identifying info
+        // Add name and email if available
+        if (data.name) {
+            const nameP = document.createElement('p');
+            nameP.innerHTML = `<strong>Name:</strong> <span id="attendee-name">${data.name || '-'}</span>`;
+            infoDiv.appendChild(nameP);
+        }
+        
+        if (data.email) {
+            const emailP = document.createElement('p');
+            emailP.innerHTML = `<strong>Email:</strong> <span id="attendee-email">${data.email || '-'}</span>`;
+            infoDiv.appendChild(emailP);
+        }
+        
+        // Add the QR code
         const codeP = document.createElement('p');
-        codeP.innerHTML = `<strong>QR Code:</strong> <span id="attendee-name">${data.code || '-'}</span>`;
+        codeP.innerHTML = `<strong>QR Code:</strong> <span>${data.code || '-'}</span>`;
+        infoDiv.appendChild(codeP);
         
         // Format the timestamps
         const formattedCheckInTime = formatDateTime(data.checkInTime);
@@ -170,11 +246,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkinP = document.createElement('p');
         const checkinStatus = data.isCheckedIn ? `⚠️ Already Checked in at ${formattedCheckInTime}` : '✅ First time check-in';
         checkinP.innerHTML = `<strong>Check-in Status:</strong> <span id="attendee-checkin">${checkinStatus}</span>`;
+        infoDiv.appendChild(checkinP);
         
         // Goodie Bag Status with nicely formatted time
         const goodiebagP = document.createElement('p');
         const goodiebagStatus = data.hasGoodieBag ? `⚠️ Already received at ${formattedGoodieBagTime}` : '✅ First time goodie bag';
         goodiebagP.innerHTML = `<strong>Goodie Bag Status:</strong> <span id="attendee-goodiebag">${goodiebagStatus}</span>`;
+        infoDiv.appendChild(goodiebagP);
         
         // Action buttons
         const actionsDiv = document.createElement('div');
@@ -201,11 +279,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             actionsDiv.appendChild(goodiebagBtn);
         }
-        
-        // Add elements to the info div
-        infoDiv.appendChild(codeP);
-        infoDiv.appendChild(checkinP);
-        infoDiv.appendChild(goodiebagP);
         
         // Add the info div and actions to the result container
         lookupResult.appendChild(infoDiv);
@@ -376,25 +449,11 @@ document.addEventListener('DOMContentLoaded', function() {
         checkinStatus.classList.add('hidden');
         goodiebagStatus.classList.add('hidden');
         
-        // Construct URL with parameters
-        const url = `${scriptUrl}?code=${encodeURIComponent(code)}`;
-        
-        fetch(url)
+        // First get check-in/goodie bag status from first API
+        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    // Display the attendee data in the scan result section only
-                    updateScanResultWithAttendeeData(data.data);
-                    
-                    // Now perform the actual scan operation (check-in or goodie bag)
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after successful operation and response
-                        unlockScanner();
-                    });
-                    
-                    // Log success
-                    logToPage(`Retrieved attendee info for: ${data.data.code}`, 'success');
-                } else {
+                if (!data.success) {
                     // Reset scan result fields if there was an error
                     resetScanResultFields();
                     
@@ -414,7 +473,49 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
+                    return;
                 }
+                
+                const checkInData = data.data;
+                
+                // Then get attendee details from second API
+                fetchAttendeeDetails(code)
+                    .then(attendeeDetails => {
+                        // Combine data from both APIs
+                        const combinedData = {
+                            ...checkInData,
+                            name: attendeeDetails.name,
+                            email: attendeeDetails.email
+                        };
+                        
+                        // Display the combined data
+                        updateScanResultWithAttendeeData(combinedData);
+                        
+                        // Now perform the actual scan operation (check-in or goodie bag)
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after successful operation and response
+                            unlockScanner();
+                        });
+                        
+                        // Log success
+                        logToPage(`Retrieved attendee info for: ${code}`, 'success');
+                    })
+                    .catch(error => {
+                        // If we can't get attendee details, still show check-in data with unknown name/email
+                        updateScanResultWithAttendeeData({
+                            ...checkInData,
+                            name: "Unknown",
+                            email: "Unknown"
+                        });
+                        
+                        // Now perform the actual scan operation (check-in or goodie bag)
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation
+                            unlockScanner();
+                        });
+                        
+                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
+                    });
             })
             .catch(error => {
                 resetScanResultFields();
@@ -440,9 +541,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Helper function to update scan result with attendee data - updated for new data structure
     function updateScanResultWithAttendeeData(data) {
-        // Show QR code as the main identifier since that's what we have
-        scanName.textContent = data.code || "-";
-        scanCompany.textContent = "-";  // No company data in the new structure
+        // Show name and email if available, otherwise show placeholder
+        scanName.textContent = data.name || "-";
+        scanCompany.textContent = data.email || "-"; // Repurpose company field for email
         
         // Show both status elements regardless of current mode
         checkinStatus.classList.remove('hidden');
@@ -476,11 +577,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Helper function to reset scan result fields - updated for dual status
+    // Helper function to reset scan result fields - updated for name and email
     function resetScanResultFields() {
         scanName.textContent = "-";
         scanCompany.textContent = "-";
-        // Remove reference to scanEmail since we're not using it anymore
         
         // Reset and hide both statuses
         checkinStatus.classList.add('hidden');

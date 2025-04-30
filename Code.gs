@@ -40,7 +40,8 @@ function handleLookup(code) {
     }
     
     // Get the row data (adjust column range as needed for your sheet)
-    const rowData = sheet.getRange(foundRow, 1, 1, 5).getValues()[0];
+    // Expand the range to include name (column F) and email (column G)
+    const rowData = sheet.getRange(foundRow, 1, 1, 7).getValues()[0];
     
     // Format dates for consistent display
     const timezone = spreadsheet.getSpreadsheetTimeZone();
@@ -62,7 +63,9 @@ function handleLookup(code) {
       isCheckedIn: rowData[1] || false, // Column B (Check-in)
       checkInTime: checkInTime, // Column C (Check-in time)
       hasGoodieBag: rowData[3] || false, // Column D (Goodie bag)
-      goodieBagTime: goodieBagTime // Column E (Goodie bag time)
+      goodieBagTime: goodieBagTime, // Column E (Goodie bag time)
+      name: rowData[5] || "", // Column F (Name)
+      email: rowData[6] || "" // Column G (Email)
     };
     
     // Return the data
