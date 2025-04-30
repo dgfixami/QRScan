@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let cameraInitAttempts = 0;
     const MAX_INIT_ATTEMPTS = 3;
     
+    // New variable to track if a scan is in process
+    let isScanning = false;
+    
     // Google Apps Script web app URL
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
     
@@ -82,6 +85,18 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error("Date formatting error:", error);
             return dateString; // Return original on error
         }
+    }
+    
+    // New function to lock scanner - modified to remove visual overlay
+    function lockScanner() {
+        isScanning = true;
+        logToPage('Scanner locked - processing current scan', 'info');
+    }
+    
+    // New function to unlock scanner - modified to remove visual overlay
+    function unlockScanner() {
+        isScanning = false;
+        logToPage('Scanner unlocked - ready for next scan', 'info');
     }
     
     // New function to lookup attendee data
@@ -213,6 +228,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to perform an action directly from lookup
     function performAction(code, actionMode) {
+        // If a scan is in progress, don't allow action
+        if (isScanning) {
+            logToPage('Please wait for current scan to complete', 'warning');
+            return;
+        }
+        
+        // Lock the scanner
+        lockScanner();
+        
         // Prepare data for Google Sheets integration
         const scanData = {
             code: code,
@@ -233,6 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
         sendToGoogleSheets(scanData, () => {
             // After successful action, refresh the lookup data
             fetchAttendeeData(code);
+            
+            // Unlock the scanner
+            unlockScanner();
         });
     }
     
@@ -265,6 +292,13 @@ document.addEventListener('DOMContentLoaded', function() {
             logToPage(`Error sending to Google Sheets: ${error.message}`, 'error');
             // Keep error alert to notify user of failures
             alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
+            
+            // Unlock the scanner even on error
+            if (typeof callback === 'function') {
+                callback();
+            } else {
+                unlockScanner();
+            }
         });
     }
     
@@ -300,7 +334,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Success callback when QR code is scanned - updated to avoid duplicate lookups
     function qrCodeSuccessCallback(decodedText) {
+        // If scanner is locked, ignore this scan
+        if (isScanning) {
+            logToPage('Ignoring scan - previous scan still processing', 'warning');
+            return;
+        }
+        
         try {
+            // Lock the scanner immediately
+            lockScanner();
+            
             const flash = document.querySelector('.camera-flash');
             if (flash) {
                 flash.classList.add('flash-animation');
@@ -327,6 +370,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             logToPage(`Error processing scan: ${error.message}`, 'error');
             resetScanResultFields();
+            // Make sure to unlock the scanner on error
+            unlockScanner();
         }
     }
     
@@ -351,7 +396,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateScanResultWithAttendeeData(data.data);
                     
                     // Now perform the actual scan operation (check-in or goodie bag)
-                    sendToGoogleSheets(scanData);
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after successful operation and response
+                        unlockScanner();
+                    });
                     
                     // Log success
                     logToPage(`Retrieved attendee info for: ${data.data.name}`, 'success');
@@ -369,7 +417,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     goodiebagStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    sendToGoogleSheets(scanData);
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after operation, even on partial failure
+                        unlockScanner();
+                    });
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                 }
@@ -387,7 +438,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 goodiebagStatusValue.className = "error-text";
                 
                 // Still try to process the scan
-                sendToGoogleSheets(scanData);
+                sendToGoogleSheets(scanData, () => {
+                    // Unlock scanner after operation, even on error
+                    unlockScanner();
+                });
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
