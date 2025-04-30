@@ -239,6 +239,53 @@ img[alt="Info icon"] {
         width: 100%;
         max-width: 100%;
     }
+    
+    /* Mobile-specific styles for lookup form */
+    .lookup-form {
+        flex-direction: row; /* Keep row layout but allow wrapping */
+    }
+    
+    .lookup-form input {
+        font-size: 14px;
+        padding: 8px;
+    }
+    
+    .lookup-form button {
+        padding: 8px 10px;
+        font-size: 14px;
+    }
+    
+    /* Make log area smaller on mobile */
+    #log-messages {
+        max-height: 120px;
+    }
+    
+    /* Reduce padding on mobile */
+    .container {
+        padding: 10px;
+    }
+    
+    .result-container {
+        padding: 15px;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+    .lookup-form {
+        flex-direction: column;
+    }
+    
+    .lookup-form input {
+        width: 100%;
+        border-radius: 5px 5px 0 0;
+    }
+    
+    .lookup-form button {
+        width: 100%;
+        border-radius: 0 0 5px 5px;
+        margin-top: -1px; /* Overlap the borders */
+    }
 }
 
 .log-container {
@@ -348,10 +395,13 @@ img[alt="Info icon"] {
 .lookup-form {
     display: flex;
     margin-bottom: 15px;
+    width: 100%;
+    flex-wrap: wrap; /* Allow wrapping on very small screens */
 }
 
 .lookup-form input {
     flex: 1;
+    min-width: 0; /* Allow input to shrink below default min-width */
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 5px 0 0 5px;
@@ -366,6 +416,7 @@ img[alt="Info icon"] {
     border-radius: 0 5px 5px 0;
     cursor: pointer;
     font-weight: bold;
+    white-space: nowrap; /* Prevent button text from wrapping */
 }
 
 .lookup-form button:hover {
