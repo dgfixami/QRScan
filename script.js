@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let isScanning = false;
     
     // Google Apps Script web app URL
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
     
     // Setup lookup button click handler
     if(lookupButton) {
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Function to display attendee data - updated to combine name fields
+    // Function to display attendee data - updated for new data structure
     function displayAttendeeData(data) {
         // Clear any previous content
         lookupResult.innerHTML = '';
@@ -158,17 +158,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const infoDiv = document.createElement('div');
         infoDiv.className = 'attendee-info';
         
-        // Combine first name and last name into a single field
-        const fullName = data.name + ' ' + data.email;
-        const email = data.company || '-';
-        
-        // Combined name field
-        const nameP = document.createElement('p');
-        nameP.innerHTML = `<strong>Name:</strong> <span id="attendee-name">${fullName}</span>`;
-        
-        // Email field (was company)
-        const emailP = document.createElement('p');
-        emailP.innerHTML = `<strong>Email:</strong> <span id="attendee-company">${email}</span>`;
+        // With the new structure, the QR code is the only identifying info
+        const codeP = document.createElement('p');
+        codeP.innerHTML = `<strong>QR Code:</strong> <span id="attendee-name">${data.code || '-'}</span>`;
         
         // Format the timestamps
         const formattedCheckInTime = formatDateTime(data.checkInTime);
@@ -210,9 +202,8 @@ document.addEventListener('DOMContentLoaded', function() {
             actionsDiv.appendChild(goodiebagBtn);
         }
         
-        // Add elements to the info div - removed the last name element
-        infoDiv.appendChild(nameP);
-        infoDiv.appendChild(emailP);
+        // Add elements to the info div
+        infoDiv.appendChild(codeP);
         infoDiv.appendChild(checkinP);
         infoDiv.appendChild(goodiebagP);
         
@@ -402,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     
                     // Log success
-                    logToPage(`Retrieved attendee info for: ${data.data.name}`, 'success');
+                    logToPage(`Retrieved attendee info for: ${data.data.code}`, 'success');
                 } else {
                     // Reset scan result fields if there was an error
                     resetScanResultFields();
@@ -447,14 +438,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Helper function to update scan result with attendee data - updated to show both statuses
+    // Helper function to update scan result with attendee data - updated for new data structure
     function updateScanResultWithAttendeeData(data) {
-        // Combine first name (name) and last name (email) into a single name field
-        const fullName = data.name + ' ' + data.email;
-        const email = data.company || "-";
-        
-        scanName.textContent = fullName;
-        scanCompany.textContent = email;  // Company field shows email
+        // Show QR code as the main identifier since that's what we have
+        scanName.textContent = data.code || "-";
+        scanCompany.textContent = "-";  // No company data in the new structure
         
         // Show both status elements regardless of current mode
         checkinStatus.classList.remove('hidden');

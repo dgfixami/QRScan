@@ -1,6 +1,6 @@
 // Google Apps Script to handle QR code scan data
 // This file should be created in the Google Apps Script editor at:
-// https://script.google.com/a/macros/fixami.com/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec
+// https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec
 
 // Define the doGet function to handle GET requests from testing
 function doGet(e) {
@@ -13,7 +13,7 @@ function doGet(e) {
   return ContentService.createTextOutput("QR Code API is running");
 }
 
-// Update handleLookup function to format dates properly before sending
+// Update handleLookup function for new column structure
 function handleLookup(code) {
   try {
     // Get the active spreadsheet
@@ -24,8 +24,8 @@ function handleLookup(code) {
       return createResponse(false, "Sheet1 not found in the spreadsheet");
     }
     
-    // Find the row with the matching code in column G
-    const dataRange = sheet.getRange("G:G").getValues();
+    // Find the row with the matching code in column A (was column G)
+    const dataRange = sheet.getRange("A:A").getValues();
     let foundRow = -1;
     
     for (let i = 0; i < dataRange.length; i++) {
@@ -40,12 +40,12 @@ function handleLookup(code) {
     }
     
     // Get the row data (adjust column range as needed for your sheet)
-    const rowData = sheet.getRange(foundRow, 1, 1, 12).getValues()[0];
+    const rowData = sheet.getRange(foundRow, 1, 1, 5).getValues()[0];
     
     // Format dates for consistent display
     const timezone = spreadsheet.getSpreadsheetTimeZone();
-    let checkInTime = rowData[9] || "";
-    let goodieBagTime = rowData[11] || "";
+    let checkInTime = rowData[2] || ""; // Column C (was column J)
+    let goodieBagTime = rowData[4] || ""; // Column E (was column L)
     
     // Only format if they are date objects
     if (checkInTime instanceof Date && !isNaN(checkInTime.getTime())) {
@@ -56,16 +56,13 @@ function handleLookup(code) {
       goodieBagTime = Utilities.formatDate(goodieBagTime, timezone, "HH:mm:ss dd-MM-yyyy");
     }
     
-    // Format the data for response
+    // Format the data for response with new column structure
     const attendeeData = {
-      name: rowData[0] || "", // Column A
-      email: rowData[1] || "", // Column B
-      company: rowData[2] || "", // Column C
-      code: rowData[6] || "", // Column G
-      isCheckedIn: rowData[8] || false, // Column I
-      checkInTime: checkInTime, // Column J (formatted)
-      hasGoodieBag: rowData[10] || false, // Column K
-      goodieBagTime: goodieBagTime // Column L (formatted)
+      code: rowData[0] || "", // Column A (QR Code)
+      isCheckedIn: rowData[1] || false, // Column B (Check-in)
+      checkInTime: checkInTime, // Column C (Check-in time)
+      hasGoodieBag: rowData[3] || false, // Column D (Goodie bag)
+      goodieBagTime: goodieBagTime // Column E (Goodie bag time)
     };
     
     // Return the data
@@ -77,7 +74,7 @@ function handleLookup(code) {
   }
 }
 
-// Define the doPost function to handle POST requests
+// Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
   try {
     // Parse the incoming data
@@ -103,8 +100,8 @@ function doPost(e) {
       return createResponse(false, "Sheet1 not found in the spreadsheet");
     }
     
-    // Find the row with the matching code in column G
-    const dataRange = sheet.getRange("G:G").getValues();
+    // Find the row with the matching code in column A (was column G)
+    const dataRange = sheet.getRange("A:A").getValues();
     let foundRow = -1;
     
     for (let i = 0; i < dataRange.length; i++) {
@@ -124,17 +121,17 @@ function doPost(e) {
     
     // Update the appropriate columns based on mode, but only if they're empty
     if (data.mode === "Check-in") {
-      // Check if checkbox in column I (9th column) is already set
-      const currentCheckInValue = sheet.getRange(foundRow, 9).getValue();
+      // Check if checkbox in column B (was column I) is already set
+      const currentCheckInValue = sheet.getRange(foundRow, 2).getValue();
       if (!currentCheckInValue) {
         // Only set checkbox if it's not already checked
-        sheet.getRange(foundRow, 9).setValue(true);
+        sheet.getRange(foundRow, 2).setValue(true);
         
-        // Check if timestamp in column J (10th column) is empty
-        const currentCheckInTime = sheet.getRange(foundRow, 10).getValue();
+        // Check if timestamp in column C (was column J) is empty
+        const currentCheckInTime = sheet.getRange(foundRow, 3).getValue();
         if (!currentCheckInTime) {
           // Only set timestamp if it's empty
-          sheet.getRange(foundRow, 10).setValue(timestamp);
+          sheet.getRange(foundRow, 3).setValue(timestamp);
         }
         
         Logger.log("Updated Check-in status and timestamp for code: " + data.code + " in row " + foundRow);
@@ -142,17 +139,17 @@ function doPost(e) {
         Logger.log("Check-in already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
       }
     } else if (data.mode === "Goodie Bag") {
-      // Check if checkbox in column K (11th column) is already set
-      const currentGoodieBagValue = sheet.getRange(foundRow, 11).getValue();
+      // Check if checkbox in column D (was column K) is already set
+      const currentGoodieBagValue = sheet.getRange(foundRow, 4).getValue();
       if (!currentGoodieBagValue) {
         // Only set checkbox if it's not already checked
-        sheet.getRange(foundRow, 11).setValue(true);
+        sheet.getRange(foundRow, 4).setValue(true);
         
-        // Check if timestamp in column L (12th column) is empty
-        const currentGoodieBagTime = sheet.getRange(foundRow, 12).getValue();
+        // Check if timestamp in column E (was column L) is empty
+        const currentGoodieBagTime = sheet.getRange(foundRow, 5).getValue();
         if (!currentGoodieBagTime) {
           // Only set timestamp if it's empty
-          sheet.getRange(foundRow, 12).setValue(timestamp);
+          sheet.getRange(foundRow, 5).setValue(timestamp);
         }
         
         Logger.log("Updated Goodie Bag status and timestamp for code: " + data.code + " in row " + foundRow);
