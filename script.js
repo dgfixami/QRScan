@@ -309,7 +309,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Modified function to display attendee data - updated to show date only for timestamp
+    // Add a function to check if a code is eligible for a goodie bag
+    function isGoodieBagEligible(code) {
+        // Check if code contains "GB" (case insensitive)
+        return code.toUpperCase().includes('GB');
+    }
+    
+    // Modified function to display attendee data - updated to show eligibility warning
     function displayAttendeeData(data) {
         // Clear any previous content
         lookupResult.innerHTML = '';
@@ -339,6 +345,14 @@ document.addEventListener('DOMContentLoaded', function() {
             infoDiv.appendChild(timestampP);
         }
         
+        // Add goodie bag eligibility warning if needed
+        if (!isGoodieBagEligible(data.code)) {
+            const warningP = document.createElement('p');
+            warningP.className = 'error-text';
+            warningP.innerHTML = `<strong>⚠️ Warning:</strong> This code is not eligible for a goodie bag (missing GB code)`;
+            infoDiv.appendChild(warningP);
+        }
+        
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'lookup-actions';
         
@@ -353,8 +367,8 @@ document.addEventListener('DOMContentLoaded', function() {
             actionsDiv.appendChild(checkinBtn);
         }
         
-        // Only show goodie bag button if not already received
-        if (!data.hasGoodieBag) {
+        // Only show goodie bag button if not already received AND code is eligible
+        if (!data.hasGoodieBag && isGoodieBagEligible(data.code)) {
             const goodiebagBtn = document.createElement('button');
             goodiebagBtn.textContent = 'Mark Goodie Bag Received';
             goodiebagBtn.className = 'action-button goodiebag-button';
@@ -379,6 +393,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // If a scan is in progress, don't allow action
         if (isScanning) {
             logToPage('Please wait for current scan to complete', 'warning');
+            return;
+        }
+        
+        // Check eligibility for goodie bag
+        if (actionMode === 'Goodie Bag' && !isGoodieBagEligible(code)) {
+            logToPage(`Cannot mark goodie bag - code ${code} is not eligible (missing GB code)`, 'error');
+            alert(`⚠️ This code is not eligible for a goodie bag. Only codes containing "GB" are eligible.`);
             return;
         }
         
@@ -483,7 +504,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log(`[${type.toUpperCase()}] ${message}`);
     }
     
-    // Success callback when QR code is scanned - updated to silently ignore duplicate scans
+    // Success callback when QR code is scanned - updated to check goodie bag eligibility before processing
     function qrCodeSuccessCallback(decodedText) {
         // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
@@ -506,6 +527,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update the UI
             codeValue.textContent = decodedText;
             codeValue.style.color = "";
+            
+            // Check eligibility for goodie bag mode first
+            if (currentMode === 'Goodie Bag' && !isGoodieBagEligible(decodedText)) {
+                logToPage(`Cannot process goodie bag - code ${decodedText} is not eligible (missing GB code)`, 'error');
+                
+              
+                // We still want to fetch the attendee data to show the user details
+                // But we won't mark it as received in the system
+                fetchAttendeeDataForScan(decodedText, null); // Pass null for scanData to skip marking
+                
+                return;
+            }
             
             // Prepare data for Google Sheets integration
             const scanData = {
@@ -576,17 +609,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             ...checkInData,
                             name: attendeeDetails.name,
                             email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
+                            timestamp: attendeeDetails.timestamp, // Use timestamp from attendeeDetails
+                            code: code // Add code to combined data for eligibility check
                         };
                         
                         // Display the combined data
                         updateScanResultWithAttendeeData(combinedData);
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after successful operation and response
+                        // Only if scanData is not null (null means ineligible for goodie bag)
+                        if (scanData) {
+                            sendToGoogleSheets(scanData, () => {
+                                // Unlock scanner after successful operation and response
+                                unlockScanner();
+                            });
+                        } else {
+                            // Just unlock the scanner without sending data
                             unlockScanner();
-                        });
+                        }
                         
                         // Log success
                         logToPage(`Retrieved attendee info for: ${code}`, 'success');
@@ -630,7 +670,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Helper function to update scan result with attendee data - updated for date-only timestamp
+    // Helper function to update scan result with attendee data - updated for date-only timestamp and eligibility warning
     function updateScanResultWithAttendeeData(data) {
         // Show name and email if available, otherwise show placeholder
         scanName.textContent = data.name || "-";
@@ -656,8 +696,11 @@ document.addEventListener('DOMContentLoaded', function() {
             checkinStatusValue.className = "success-text";
         }
         
-        // Update goodie bag status
-        if (data.hasGoodieBag) {
+        // Update goodie bag status - add eligibility warning
+        if (!isGoodieBagEligible(data.code) && currentMode === 'Goodie Bag') {
+            goodiebagStatusValue.textContent = "⚠️ Not eligible (missing GB code)";
+            goodiebagStatusValue.className = "error-text";
+        } else if (data.hasGoodieBag) {
             goodiebagStatusValue.textContent = `Already received at ${formatDateTime(data.goodieBagTime)}`;
             goodiebagStatusValue.className = "warning-text";
         } else {
