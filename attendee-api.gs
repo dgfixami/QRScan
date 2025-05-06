@@ -39,14 +39,26 @@ function handleAttendeeSearch(code) {
       return createResponse(false, "QR code not found in spreadsheet");
     }
     
-    // Get the attendee data from columns B, C, and D (shifted from A, B, C)
-    const rowData = sheet.getRange(foundRow, 2, 1, 3).getValues()[0];
+    // Get the attendee data from columns A, B, C, D for timestamp, firstname, lastname, and email
+    // Make sure to start from column A
+    const rowData = sheet.getRange(foundRow, 1, 1, 4).getValues()[0];
+    
+    // Format timestamp if it's a date
+    let timestamp = rowData[0] || "";
+    if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+      const timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+      // Get day of the week
+      const dayOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][timestamp.getDay()];
+      const formattedDate = Utilities.formatDate(timestamp, timezone, "dd/MM/yyyy");
+      timestamp = dayOfWeek + " " + formattedDate; // Format with day name
+    }n A (timestamp)
+      firstname: rowData[1] || "",   // Column B (firstname)
+      lastname: rowData[2] || "",    // Column C (lastname)
+      email: rowData[3] || ""        // Column D (em
     
     // Format the data for response
     const attendeeData = {
-      firstname: rowData[0] || "", // Column B (was A)
-      lastname: rowData[1] || "",  // Column C (was B)
-      email: rowData[2] || ""      // Column D (was C)
+      timestamp: timestamp,          // Columail)
     };
     
     // Return the data

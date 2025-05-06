@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Scan result elements
     const scanName = document.getElementById('scan-name');
     const scanCompany = document.getElementById('scan-company');
+    const scanTimestamp = document.getElementById('scan-timestamp');
     const scanEmail = document.getElementById('scan-email'); // Will be unused but keep reference to avoid errors
     const checkinStatus = document.getElementById('checkin-status');
     const checkinStatusValue = document.getElementById('checkin-status-value');
@@ -54,50 +55,141 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // New helper function to format dates nicely
-    function formatDateTime(dateString) {
+    // Updated helper function to format dates with day of the week
+    function formatDateTime(dateString, dateOnly = false) {
         // If empty/null, return empty string
         if (!dateString) return '';
         
         try {
-            // Parse the input date string (handles both ISO format and spreadsheet format)
-            const date = new Date(dateString);
+            // Array of day names
+            const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             
-            // Check if date is valid
-            if (isNaN(date.getTime())) {
-                // If already in DD-MM-YYYY HH:MM:SS format, return as is
-                if (typeof dateString === 'string' && 
-                    dateString.match(/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}$/)) {
-                    return dateString;
+            // Function to add day of week to date string
+            const addDayOfWeek = (date, dateStr) => {
+                if (!date || isNaN(date.getTime())) return dateStr;
+                const dayName = dayNames[date.getDay()];
+                return `${dayName} ${dateStr}`;
+            };
+            
+            // For ISO date strings that come from API responses like "2025-05-06T12:59:53.125Z"
+            if (typeof dateString === 'string' && dateString.includes('T') && dateString.includes('Z')) {
+                const date = new Date(dateString);
+                if (!isNaN(date.getTime())) {
+                    // Format as DD/MM/YYYY only if dateOnly is true
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-based
+                    const year = date.getFullYear();
+                    
+                    if (dateOnly) {
+                        const dateStr = `${day}/${month}/${year}`;
+                        return addDayOfWeek(date, dateStr);
+                    }
+                    
+                    // Otherwise include time
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    const seconds = String(date.getSeconds()).padStart(2, '0');
+                    
+                    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
                 }
-                return dateString; // Return original if can't parse
             }
             
-            // Format the date as HH:MM:SS DD-MM-YYYY
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-based
-            const year = date.getFullYear();
+            // Handle Excel/Sheets date format with optional time removal
+            if (typeof dateString === 'string') {
+                // For strings that already include date and time with slashes (DD/MM/YYYY HH:MM:SS)
+                if (dateString.includes('/') && dateString.includes(':')) {
+                    if (dateOnly) {
+                        // Try to parse the date to get day of week
+                        const parts = dateString.split(' ')[0].split('/');
+                        if (parts.length === 3) {
+                            const date = new Date(parts[2], parts[1] - 1, parts[0]);
+                            if (!isNaN(date.getTime())) {
+                                return addDayOfWeek(date, dateString.split(' ')[0]);
+                            }
+                        }
+                        return dateString.split(' ')[0];
+                    }
+                    return dateString;
+                }
+                
+                // For strings with hyphens
+                if (dateString.includes('-')) {
+                    const converted = dateString.replace(/-/g, '/');
+                    // If it has time part, split it off for dateOnly
+                    if (converted.includes(':') && dateOnly) {
+                        const datePart = converted.split(' ')[0];
+                        const parts = datePart.split('/');
+                        if (parts.length === 3) {
+                            const date = new Date(parts[2], parts[1] - 1, parts[0]);
+                            if (!isNaN(date.getTime())) {
+                                return addDayOfWeek(date, datePart);
+                            }
+                        }
+                        return datePart;
+                    }
+                    return converted;
+                }
+                
+                // For strings that already include day of week
+                if (dateString.split(' ').length > 1) {
+                    const firstWord = dateString.split(' ')[0].toLowerCase();
+                    if (dayNames.some(day => firstWord === day.toLowerCase())) {
+                        return dateString; // Already has day of week
+                    }
+                }
+            }
             
-            return `${hours}:${minutes}:${seconds} ${day}-${month}-${year}`;
+            // Last resort: try to parse as Date object
+            const date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+                // Format as DD/MM/YYYY
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-based
+                const year = date.getFullYear();
+                
+                if (dateOnly) {
+                    const dateStr = `${day}/${month}/${year}`;
+                    return addDayOfWeek(date, dateStr);
+                }
+                
+                // Include time if not dateOnly
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                
+                return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+            }
+            
+            // If we couldn't parse it, just return the original string
+            return dateString;
         } catch (error) {
             console.error("Date formatting error:", error);
             return dateString; // Return original on error
         }
     }
     
-    // New function to lock scanner - modified to remove visual overlay
+    // New function to lock scanner - updated to disable mode toggle
     function lockScanner() {
         isScanning = true;
         logToPage('Scanner locked - processing current scan', 'info');
+        
+        // Disable mode toggle during scanning
+        if (modeToggle) {
+            modeToggle.disabled = true;
+            document.querySelector('.toggle').classList.add('disabled');
+        }
     }
     
-    // New function to unlock scanner - modified to remove visual overlay
+    // New function to unlock scanner - updated to re-enable mode toggle
     function unlockScanner() {
         isScanning = false;
         logToPage('Scanner unlocked - ready for next scan', 'info');
+        
+        // Re-enable mode toggle after scanning completes
+        if (modeToggle) {
+            modeToggle.disabled = false;
+            document.querySelector('.toggle').classList.remove('disabled');
+        }
     }
     
     // New function to lookup attendee data
@@ -148,13 +240,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 const lastname = data.data.lastname || "";
                 const fullName = [firstname, lastname].filter(Boolean).join(' ');
                 
+                // Get the timestamp from column A
+                const timestamp = data.data.timestamp || "";
+                
                 // Log the extracted details
                 logToPage(`Found attendee: ${fullName}`, 'info');
                 
                 return {
                     name: fullName,
                     email: data.data.email || "",
-                    code: code
+                    code: code,
+                    timestamp: timestamp // Include the timestamp from column A
                 };
             })
             .catch(error => {
@@ -188,7 +284,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         const combinedData = {
                             ...checkInData,
                             name: attendeeDetails.name,
-                            email: attendeeDetails.email
+                            email: attendeeDetails.email,
+                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
                         };
                         
                         // Display the combined data
@@ -200,7 +297,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         displayAttendeeData({
                             ...checkInData,
                             name: "Unknown",
-                            email: "Unknown"
+                            email: "Unknown",
+                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                         });
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
@@ -211,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Modified function to display attendee data - updated for new data structure
+    // Modified function to display attendee data - updated to show date only for timestamp
     function displayAttendeeData(data) {
         // Clear any previous content
         lookupResult.innerHTML = '';
@@ -233,28 +331,14 @@ document.addEventListener('DOMContentLoaded', function() {
             infoDiv.appendChild(emailP);
         }
         
-        // Add the QR code
-        const codeP = document.createElement('p');
-        codeP.innerHTML = `<strong>QR Code:</strong> <span>${data.code || '-'}</span>`;
-        infoDiv.appendChild(codeP);
+        // Add timestamp if available - show date only without time
+        if (data.timestamp) {
+            const timestampP = document.createElement('p');
+            const formattedDate = formatDateTime(data.timestamp, true); // true = date only
+            timestampP.innerHTML = `<strong>Registered at:</strong> <span>${formattedDate || '-'}</span>`;
+            infoDiv.appendChild(timestampP);
+        }
         
-        // Format the timestamps
-        const formattedCheckInTime = formatDateTime(data.checkInTime);
-        const formattedGoodieBagTime = formatDateTime(data.goodieBagTime);
-        
-        // Check-in Status with nicely formatted time
-        const checkinP = document.createElement('p');
-        const checkinStatus = data.isCheckedIn ? `⚠️ Already Checked in at ${formattedCheckInTime}` : '✅ First time check-in';
-        checkinP.innerHTML = `<strong>Check-in Status:</strong> <span id="attendee-checkin">${checkinStatus}</span>`;
-        infoDiv.appendChild(checkinP);
-        
-        // Goodie Bag Status with nicely formatted time
-        const goodiebagP = document.createElement('p');
-        const goodiebagStatus = data.hasGoodieBag ? `⚠️ Already received at ${formattedGoodieBagTime}` : '✅ First time goodie bag';
-        goodiebagP.innerHTML = `<strong>Goodie Bag Status:</strong> <span id="attendee-goodiebag">${goodiebagStatus}</span>`;
-        infoDiv.appendChild(goodiebagP);
-        
-        // Action buttons
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'lookup-actions';
         
@@ -350,6 +434,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Execute callback if provided
             if (typeof callback === 'function') {
                 callback();
+            } else {
+                // Ensure unlock happens even if callback is not provided
+                unlockScanner();
             }
         })
         .catch(error => {
@@ -396,17 +483,19 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log(`[${type.toUpperCase()}] ${message}`);
     }
     
-    // Success callback when QR code is scanned - updated to avoid duplicate lookups
+    // Success callback when QR code is scanned - updated to silently ignore duplicate scans
     function qrCodeSuccessCallback(decodedText) {
-        // If scanner is locked, ignore this scan
+        // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
-            logToPage('Ignoring scan - previous scan still processing', 'warning');
-            return;
+            return; // Silent return without logging
         }
         
         try {
             // Lock the scanner immediately
             lockScanner();
+            
+            // Add safety timeout to ensure unlock happens no matter what
+            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
@@ -444,6 +533,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show loading state
         scanName.textContent = "Loading...";
         scanCompany.textContent = "Loading...";
+        scanTimestamp.textContent = "Loading...";
         
         // Reset and hide both status elements during loading
         checkinStatus.classList.add('hidden');
@@ -485,7 +575,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         const combinedData = {
                             ...checkInData,
                             name: attendeeDetails.name,
-                            email: attendeeDetails.email
+                            email: attendeeDetails.email,
+                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
                         };
                         
                         // Display the combined data
@@ -505,7 +596,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         updateScanResultWithAttendeeData({
                             ...checkInData,
                             name: "Unknown",
-                            email: "Unknown"
+                            email: "Unknown",
+                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                         });
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
@@ -529,9 +621,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 goodiebagStatusValue.textContent = "Error connecting to database";
                 goodiebagStatusValue.className = "error-text";
                 
-                // Still try to process the scan
+                // Make sure to unlock scanner even on connection error
                 sendToGoogleSheets(scanData, () => {
-                    // Unlock scanner after operation, even on error
                     unlockScanner();
                 });
                 
@@ -539,11 +630,18 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Helper function to update scan result with attendee data - updated for new data structure
+    // Helper function to update scan result with attendee data - updated for date-only timestamp
     function updateScanResultWithAttendeeData(data) {
         // Show name and email if available, otherwise show placeholder
         scanName.textContent = data.name || "-";
         scanCompany.textContent = data.email || "-"; // Repurpose company field for email
+        
+        // Display timestamp with date only format
+        if (data.timestamp) {
+            scanTimestamp.textContent = formatDateTime(data.timestamp, true); // true = date only
+        } else {
+            scanTimestamp.textContent = "-";
+        }
         
         // Show both status elements regardless of current mode
         checkinStatus.classList.remove('hidden');
@@ -577,10 +675,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Helper function to reset scan result fields - updated for name and email
+    // Helper function to reset scan result fields - updated for name, email and timestamp
     function resetScanResultFields() {
         scanName.textContent = "-";
         scanCompany.textContent = "-";
+        scanTimestamp.textContent = "-";
         
         // Reset and hide both statuses
         checkinStatus.classList.add('hidden');
@@ -590,6 +689,16 @@ document.addEventListener('DOMContentLoaded', function() {
         goodiebagStatus.classList.add('hidden');
         goodiebagStatusValue.textContent = "-";
         goodiebagStatusValue.className = "";
+    }
+    
+    // Add a fallback protection to ensure toggle is always re-enabled
+    function ensureUIUnlocked() {
+        // Check if the toggle is in disabled state and unlock it if needed
+        if (modeToggle && modeToggle.disabled) {
+            modeToggle.disabled = false;
+            document.querySelector('.toggle').classList.remove('disabled');
+            logToPage('Toggle re-enabled by safety check', 'info');
+        }
     }
     
     modeToggle.addEventListener('change', function() {

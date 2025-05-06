@@ -40,21 +40,29 @@ function handleLookup(code) {
     }
     
     // Get the row data (adjust column range as needed for your sheet)
-    // Expand the range to include name (column F) and email (column G)
-    const rowData = sheet.getRange(foundRow, 1, 1, 7).getValues()[0];
+    // Expand the range to include name (column F), email (column G) and timestamp (column H)
+    const rowData = sheet.getRange(foundRow, 1, 1, 8).getValues()[0];
     
     // Format dates for consistent display
     const timezone = spreadsheet.getSpreadsheetTimeZone();
     let checkInTime = rowData[2] || ""; // Column C (was column J)
     let goodieBagTime = rowData[4] || ""; // Column E (was column L)
+    let timestamp = rowData[7] || ""; // Column H (timestamp)
     
     // Only format if they are date objects
     if (checkInTime instanceof Date && !isNaN(checkInTime.getTime())) {
-      checkInTime = Utilities.formatDate(checkInTime, timezone, "HH:mm:ss dd-MM-yyyy");
+      checkInTime = Utilities.formatDate(checkInTime, timezone, "dd/MM/yyyy HH:mm:ss");
     }
     
     if (goodieBagTime instanceof Date && !isNaN(goodieBagTime.getTime())) {
-      goodieBagTime = Utilities.formatDate(goodieBagTime, timezone, "HH:mm:ss dd-MM-yyyy");
+      goodieBagTime = Utilities.formatDate(goodieBagTime, timezone, "dd/MM/yyyy HH:mm:ss");
+    }
+    
+    if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+      // Get day of the week
+      const dayOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][timestamp.getDay()];
+      const formattedDate = Utilities.formatDate(timestamp, timezone, "dd/MM/yyyy");
+      timestamp = dayOfWeek + " " + formattedDate; // Format with day name
     }
     
     // Format the data for response with new column structure
@@ -65,7 +73,8 @@ function handleLookup(code) {
       hasGoodieBag: rowData[3] || false, // Column D (Goodie bag)
       goodieBagTime: goodieBagTime, // Column E (Goodie bag time)
       name: rowData[5] || "", // Column F (Name)
-      email: rowData[6] || "" // Column G (Email)
+      email: rowData[6] || "", // Column G (Email)
+      timestamp: timestamp // Column H (Timestamp)
     };
     
     // Return the data
@@ -120,7 +129,7 @@ function doPost(e) {
     
     // Get current timestamp in local timezone
     const now = new Date();
-    const timestamp = Utilities.formatDate(now, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "dd-MM-yyyy HH:mm:ss");
+    const timestamp = Utilities.formatDate(now, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
     
     // Update the appropriate columns based on mode, but only if they're empty
     if (data.mode === "Check-in") {

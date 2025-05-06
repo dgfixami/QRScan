@@ -96,6 +96,17 @@ input:checked + .slider:before {
     transform: translateX(30px);
 }
 
+/* Add styles for disabled toggle during scanning */
+.toggle.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.toggle.disabled .slider {
+    background-color: #cccccc !important;
+}
+
 .scanner-container {
     margin-bottom: 20px;
     text-align: center;
