@@ -345,6 +345,26 @@ document.addEventListener('DOMContentLoaded', function() {
             infoDiv.appendChild(timestampP);
         }
         
+        // Add check-in status
+        const checkinP = document.createElement('p');
+        if (data.isCheckedIn) {
+            checkinP.innerHTML = `<strong>Check-in:</strong> <span class="warning-text">Already checked in at ${formatDateTime(data.checkInTime)}</span>`;
+        } else {
+            checkinP.innerHTML = `<strong>Check-in:</strong> <span class="success-text">Not checked in yet</span>`;
+        }
+        infoDiv.appendChild(checkinP);
+        
+        // Add goodie bag status
+        const goodieP = document.createElement('p');
+        if (!isGoodieBagEligible(data.code)) {
+            goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="error-text">Not eligible (missing GB code)</span>`;
+        } else if (data.hasGoodieBag) {
+            goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="warning-text">Already received at ${formatDateTime(data.goodieBagTime)}</span>`;
+        } else {
+            goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="success-text">Not received yet</span>`;
+        }
+        infoDiv.appendChild(goodieP);
+        
         // Add goodie bag eligibility warning if needed
         if (!isGoodieBagEligible(data.code)) {
             const warningP = document.createElement('p');
