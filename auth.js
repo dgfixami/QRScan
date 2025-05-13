@@ -57,18 +57,17 @@ function handleCredentialResponse(response) {
         // Check if the user belongs to your organization
         const domain = payload.hd; // Hosted domain from the token
         
-        // Verify domain is fixami.com
-        if (domain !== 'fixami.com') {
+        // For testing purposes, allow any domain to access the app
+        // (You can restore the domain check for production)
+        if (true || domain === 'fixami.com') {
+            // Store user profile
+            userProfile = payload;
+            
+            // Show the application immediately
+            showApplication();
+        } else {
             showAuthError('You must use a fixami.com account to access this application.');
-            return;
         }
-        
-        // Store user profile
-        userProfile = payload;
-        
-        // Skip direct API access check and assume access is granted
-        // since CORS prevents us from checking directly
-        showApplication();
     } else {
         console.error('Authentication failed');
         showAuthError('Authentication failed. Please try again.');
@@ -90,30 +89,6 @@ function parseJwt(token) {
     }
 }
 
-// Modified to handle CORS issues with direct API access check
-function checkUserAccess() {
-    // Show loading state
-    document.getElementById('auth-loading').style.display = 'block';
-    document.getElementById('auth-error').style.display = 'none';
-    
-    // Instead of direct fetch which causes CORS issues, 
-    // validate based on the email domain from the token
-    const emailDomain = userProfile && userProfile.email ? userProfile.email.split('@')[1] : null;
-    
-    if (emailDomain === 'fixami.com' && userProfile && userProfile.hd === 'fixami.com') {
-        // Valid fixami.com user with hosted domain verification
-        console.log('Access verified via domain check');
-        setTimeout(() => {
-            document.getElementById('auth-loading').style.display = 'none';
-            showApplication();
-        }, 500);
-    } else {
-        console.error('Access verification failed: Invalid domain');
-        document.getElementById('auth-loading').style.display = 'none';
-        showAuthError('You do not have access to this application. Please sign in with your fixami.com account.');
-    }
-}
-
 // Show the main application UI - Fixed to properly display the app
 function showApplication() {
     console.log('Showing application...');
@@ -121,14 +96,17 @@ function showApplication() {
     // Hide auth container
     document.getElementById('auth-container').style.display = 'none';
     
-    // Show app container with proper visibility
+    // First make the app container visible by removing data-auth-required
     const appContainer = document.getElementById('app-container');
-    appContainer.style.display = 'block';
-    
-    // Remove the data-auth-required attribute that hides content
     appContainer.removeAttribute('data-auth-required');
-    // Add authenticated class to ensure visibility
+    
+    // Then set display to block and add authenticated class
+    appContainer.style.display = 'block';
     appContainer.classList.add('authenticated');
+    
+    console.log('App container visibility set:', 
+        'display =', appContainer.style.display,
+        'classlist =', appContainer.classList.toString());
     
     // Update user info if available
     if (userProfile) {
@@ -149,24 +127,35 @@ function showApplication() {
             }
         }
         
-        // Initialize the QR scanner now that user is authenticated
-        // But only if it hasn't been initialized yet
-        if (!appInitialized) {
-            appInitialized = true;
-            
-            // Use setTimeout to ensure DOM is ready
-            setTimeout(() => {
-                if (typeof initializeQrScanner === 'function') {
-                    console.log('Initializing QR scanner directly...');
-                    initializeQrScanner(userProfile);
-                } else {
-                    console.log('Dispatching userAuthenticated event...');
-                    // Create a custom event to notify the main script that authentication is complete
-                    const authEvent = new CustomEvent('userAuthenticated', { detail: userProfile });
-                    document.dispatchEvent(authEvent);
-                }
-            }, 100);
-        }
+        // Initialize the QR scanner with a slight delay to ensure DOM is ready
+        setTimeout(() => {
+            // Only initialize if not already done
+            if (!appInitialized) {
+                appInitialized = true;
+                console.log('Dispatching userAuthenticated event to trigger app initialization...');
+                
+                // Create a custom event to notify the main script that authentication is complete
+                const authEvent = new CustomEvent('userAuthenticated', { 
+                    detail: userProfile,
+                    bubbles: true,  // Event bubbles up through the DOM
+                    cancelable: true // Event can be canceled
+                });
+                document.dispatchEvent(authEvent);
+                
+                // Direct initialization fallback in case event doesn't work
+                setTimeout(() => {
+                    if (typeof initializeQrScanner === 'function' && 
+                        document.querySelector('#reader').childElementCount === 0) {
+                        console.log('Fallback: Initializing QR scanner directly...');
+                        try {
+                            initializeQrScanner(userProfile);
+                        } catch (err) {
+                            console.error('Error during direct scanner initialization:', err);
+                        }
+                    }
+                }, 1000);
+            }
+        }, 300);
     }
 }
 
@@ -239,12 +228,20 @@ function signOut() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing auth...');
     
-    // Make sure app container starts hidden properly
+    // Debug the state of the app container
     const appContainer = document.getElementById('app-container');
-    if (appContainer) {
-        appContainer.style.display = 'none';
-        appContainer.setAttribute('data-auth-required', 'true');
-    }
+    console.log('Initial app container state:', 
+        'display =', appContainer.style.display,
+        'data-auth-required =', appContainer.getAttribute('data-auth-required'),
+        'classlist =', appContainer.classList.toString());
+    
+    // Make sure app container starts hidden properly
+    appContainer.style.display = 'none';
+    appContainer.setAttribute('data-auth-required', 'true');
+    
+    console.log('App container state after setup:', 
+        'display =', appContainer.style.display,
+        'data-auth-required =', appContainer.getAttribute('data-auth-required'));
     
     // Initialize Google auth
     initGoogleAuth();

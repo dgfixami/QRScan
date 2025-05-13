@@ -95,6 +95,61 @@ body {
     display: block !important;
 }
 
+/* Additional styles to ensure proper visibility */
+
+/* Fix visibility issues with authenticated app container */
+#app-container.authenticated {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* Make sure the reader container is properly sized and visible */
+#reader {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    min-height: 300px !important;
+    height: 300px !important;
+    margin: 0 auto 15px;
+    border: 3px solid #333;
+    border-radius: 10px;
+    overflow: visible !important;
+    z-index: 100;
+    background-color: #000;
+}
+
+/* Ensure the camera view is visible */
+#reader video {
+    position: relative !important;
+    z-index: 101 !important;
+}
+
+/* Ensure scanner elements are accessible */
+#reader canvas {
+    position: relative !important; 
+    z-index: 102 !important;
+}
+
+/* Make sure buttons and controls are clickable */
+.lookup-form button, 
+#mode-toggle,
+.action-button {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 200;
+}
+
+/* Make sure the scanner area is displayed */
+.scanner-container {
+    position: relative !important;
+    z-index: 100 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
 /* User info styles */
 .user-info-bar {
     background-color: #fff;
