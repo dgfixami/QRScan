@@ -1,16 +1,73 @@
 // Google Apps Script to handle QR code scan data
-// This file should be created in the Google Apps Script editor at:
-// https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec
+// Added authentication check to ensure only fixami.com users can access
 
 // Define the doGet function to handle GET requests from testing
 function doGet(e) {
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
+    // Require authentication token
+    if (!e.parameter.authToken || !e.parameter.userEmail) {
+      return createResponse(false, "Authentication required. Please log in.");
+    }
+    
+    // Verify authentication token
+    const isAuthenticated = verifyAuthToken(e.parameter.authToken, e.parameter.userEmail);
+    if (!isAuthenticated) {
+      return createResponse(false, "Authentication failed. Only fixami.com email addresses are allowed.");
+    }
+    
     return handleLookup(e.parameter.code);
   }
   
-  // Default response for simple testing
-  return ContentService.createTextOutput("QR Code API is running");
+  // Default response
+  return ContentService.createTextOutput("Attendee API is running. Authentication required for access.");
+}
+
+// Helper function to verify authentication token
+function verifyAuthToken(token, email) {
+  if (!token || !email) {
+    return false;
+  }
+  
+  // Check email domain
+  if (!email.endsWith('@fixami.com')) {
+    Logger.log(`Authentication failed: Email ${email} is not from fixami.com domain`);
+    return false;
+  }
+  
+  try {
+    // Parse and verify JWT token (simplified version - in production, use proper JWT verification)
+    // A more secure approach would validate the token signature with Google's public keys
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      Logger.log('Invalid JWT format');
+      return false;
+    }
+    
+    // Get payload
+    const payloadBase64 = tokenParts[1];
+    const payload = JSON.parse(Utilities.newBlob(
+      Utilities.base64Decode(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'))
+    ).getDataAsString());
+    
+    // Verify email matches
+    if (payload.email !== email) {
+      Logger.log(`Token email mismatch: ${payload.email} vs ${email}`);
+      return false;
+    }
+    
+    // Check token expiration
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      Logger.log('Token expired');
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    Logger.log(`Token verification error: ${error.toString()}`);
+    return false;
+  }
 }
 
 // Update handleLookup function for new column structure
@@ -86,14 +143,22 @@ function handleLookup(code) {
   }
 }
 
-// Define the doPost function to handle POST requests with new column structure
+// Define the doPost function to handle POST requests with authentication check
 function doPost(e) {
   try {
     // Parse the incoming data
     const data = JSON.parse(e.postData.contents);
     
-    // Log the received data for debugging
-    Logger.log("Received data: " + JSON.stringify(data));
+    // Require authentication data
+    if (!data.authToken || !data.userEmail) {
+      return createResponse(false, "Authentication required. Please log in.");
+    }
+    
+    // Check authentication token
+    const isAuthenticated = verifyAuthToken(data.authToken, data.userEmail);
+    if (!isAuthenticated) {
+      return createResponse(false, "Authentication failed. Only fixami.com email addresses are allowed.");
+    }
     
     // Validate required data
     if (!data.code) {
@@ -184,7 +249,7 @@ function doPost(e) {
   }
 }
 
-// Helper function to log scans in a separate sheet for historical records
+// Updated helper function to log scans in a separate sheet for historical records
 function logScan(data, rowNumber, timestamp) {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -193,9 +258,12 @@ function logScan(data, rowNumber, timestamp) {
     let logSheet = spreadsheet.getSheetByName("ScanLog");
     if (!logSheet) {
       logSheet = spreadsheet.insertSheet("ScanLog");
-      // Add headers
-      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status"]);
+      // Add headers with authentication info
+      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status", "User Email"]);
     }
+    
+    // Extract user email for logging
+    let userEmail = data.userEmail || "Unknown";
     
     // Append the scan data
     logSheet.appendRow([
@@ -203,7 +271,8 @@ function logScan(data, rowNumber, timestamp) {
       data.code, 
       data.mode,
       rowNumber > 0 ? rowNumber : "Not Found",
-      rowNumber > 0 ? "Updated" : "Not Found"
+      rowNumber > 0 ? "Updated" : "Not Found",
+      userEmail
     ]);
   } catch (error) {
     Logger.log("Error logging scan: " + error.toString());
