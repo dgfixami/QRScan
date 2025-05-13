@@ -4,34 +4,13 @@
 
 // Define the doGet function to handle GET requests from testing
 function doGet(e) {
-  // For JSONP support
-  const callback = e.parameter.callback;
-  
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    const responseData = handleLookup(e.parameter.code);
-    
-    // If JSONP was requested
-    if (callback) {
-      return ContentService.createTextOutput(callback + '(' + JSON.stringify(responseData.getContent()) + ')')
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
-    
-    // Otherwise add CORS headers
-    return addCorsHeaders(responseData);
+    return handleLookup(e.parameter.code);
   }
   
   // Default response for simple testing
-  const output = ContentService.createTextOutput("QR Code API is running");
-  
-  // If JSONP was requested
-  if (callback) {
-    return ContentService.createTextOutput(callback + '("QR Code API is running")')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  
-  // Otherwise add CORS headers
-  return addCorsHeaders(output);
+  return ContentService.createTextOutput("QR Code API is running");
 }
 
 // Update handleLookup function for new column structure
@@ -70,7 +49,7 @@ function handleLookup(code) {
     let goodieBagTime = rowData[4] || ""; // Column E (was column L)
     let timestamp = rowData[7] || ""; // Column H (timestamp)
     
-    // Enhanced date formatting with day of week
+    // Only format if they are date objects
     if (checkInTime instanceof Date && !isNaN(checkInTime.getTime())) {
       checkInTime = Utilities.formatDate(checkInTime, timezone, "dd/MM/yyyy HH:mm:ss");
     }
@@ -109,11 +88,6 @@ function handleLookup(code) {
 
 // Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
-  // Handle OPTIONS requests for CORS preflight
-  if (e.method === 'OPTIONS') {
-    return handleOptions();
-  }
-  
   try {
     // Parse the incoming data
     const data = JSON.parse(e.postData.contents);
@@ -123,11 +97,11 @@ function doPost(e) {
     
     // Validate required data
     if (!data.code) {
-      return addCorsHeaders(createResponse(false, "Missing QR code data"));
+      return createResponse(false, "Missing QR code data");
     }
     
     if (!data.mode) {
-      return addCorsHeaders(createResponse(false, "Missing mode data"));
+      return createResponse(false, "Missing mode data");
     }
     
     // Get the active spreadsheet
@@ -135,7 +109,7 @@ function doPost(e) {
     const sheet = spreadsheet.getSheetByName("Sheet1");
     
     if (!sheet) {
-      return addCorsHeaders(createResponse(false, "Sheet1 not found in the spreadsheet"));
+      return createResponse(false, "Sheet1 not found in the spreadsheet");
     }
     
     // Find the row with the matching code in column A (was column G)
@@ -150,7 +124,7 @@ function doPost(e) {
     }
     
     if (foundRow === -1) {
-      return addCorsHeaders(createResponse(false, "Code not found in spreadsheet"));
+      return createResponse(false, "Code not found in spreadsheet");
     }
     
     // Get current timestamp in local timezone
@@ -195,18 +169,18 @@ function doPost(e) {
         Logger.log("Goodie Bag already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
       }
     } else {
-      return addCorsHeaders(createResponse(false, "Invalid mode: " + data.mode));
+      return createResponse(false, "Invalid mode: " + data.mode);
     }
     
     // You can also log the scan in a dedicated log sheet
     logScan(data, foundRow, timestamp);
     
-    // Return success response with CORS headers
-    return addCorsHeaders(createResponse(true, "QR code processed successfully for mode: " + data.mode));
+    // Return success response
+    return createResponse(true, "QR code processed successfully for mode: " + data.mode);
     
   } catch (error) {
     Logger.log("Error: " + error.toString());
-    return addCorsHeaders(createResponse(false, "Error processing request: " + error.toString()));
+    return createResponse(false, "Error processing request: " + error.toString());
   }
 }
 
@@ -250,25 +224,4 @@ function createResponse(success, message, data = null) {
   return ContentService
     .createTextOutput(JSON.stringify(response))
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-// Enhanced CORS headers to allow requests from dgfixami.github.io
-function addCorsHeaders(output) {
-  return output
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    .setHeader('Access-Control-Max-Age', '3600')
-    // Important: Set Cache-Control to prevent caching that can interfere with CORS
-    .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-}
-
-function handleOptions() {
-  return ContentService.createTextOutput('')
-    .setMimeType(ContentService.MimeType.TEXT)
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    .setHeader('Access-Control-Max-Age', '3600')
-    .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 }
