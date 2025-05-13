@@ -103,5 +103,26 @@
     <script>
         console.log('Page loading complete, waiting for auth...');
     </script>
+    
+    <!-- Add this script right before the closing </body> tag -->
+    <script>
+    // Message handler for iframe communication
+    window.addEventListener('message', function(event) {
+        // Check if the message is from our Google Apps Script domains
+        if (event.origin.includes('script.google.com')) {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('Received message from iframe:', data);
+                
+                // Find the appropriate callback based on any identifiers in the message
+                if (data.callbackId && window[data.callbackId]) {
+                    window[data.callbackId](data);
+                }
+            } catch (e) {
+                console.error('Error processing iframe message:', e);
+            }
+        }
+    });
+    </script>
 </body>
 </html>

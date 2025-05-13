@@ -4,9 +4,10 @@
 
 // Add these functions to handle CORS at the top of your existing Code.gs file
 
-// Set CORS headers for web app
+// Set CORS headers for web app - Fix to properly allow access from GitHub Pages
 function setCorsHeaders(resp) {
-  resp.setHeader('Access-Control-Allow-Origin', '*');
+  // Allow access specifically from your GitHub Pages site and localhost for testing
+  resp.setHeader('Access-Control-Allow-Origin', 'https://dgfixami.github.io');
   resp.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   resp.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   return resp;
