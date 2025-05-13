@@ -2,38 +2,15 @@
 // This file should be created in the Google Apps Script editor at:
 // https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec
 
-// Add these functions to handle CORS at the top of your existing Code.gs file
-
-// Set CORS headers for web app
-function setCorsHeaders(resp) {
-  resp.setHeader('Access-Control-Allow-Origin', '*');
-  resp.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  resp.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  return resp;
-}
-
-// Handle OPTIONS requests for CORS preflight
-function doOptions(e) {
-  var resp = ContentService.createTextOutput('');
-  resp = setCorsHeaders(resp);
-  return resp;
-}
-
-// Modify your existing doGet function to include CORS headers
+// Define the doGet function to handle GET requests from testing
 function doGet(e) {
-  var resp;
-  
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    resp = handleLookup(e.parameter.code);
-  } else {
-    // Default response for simple testing
-    resp = ContentService.createTextOutput("QR Code API is running");
+    return handleLookup(e.parameter.code);
   }
   
-  // Add CORS headers
-  resp = setCorsHeaders(resp);
-  return resp;
+  // Default response for simple testing
+  return ContentService.createTextOutput("QR Code API is running");
 }
 
 // Update handleLookup function for new column structure
@@ -109,31 +86,22 @@ function handleLookup(code) {
   }
 }
 
-// Modify your existing doPost function to include CORS headers
+// Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
-  var resp;
-  
   try {
-    // Use e.parameter.data for form submissions
-    let data;
-    if (e.postData) {
-      data = JSON.parse(e.postData.contents);
-    } else if (e.parameter && e.parameter.data) {
-      data = JSON.parse(e.parameter.data);
-    } else {
-      resp = createResponse(false, "No data received");
-      return setCorsHeaders(resp);
-    }
+    // Parse the incoming data
+    const data = JSON.parse(e.postData.contents);
+    
+    // Log the received data for debugging
+    Logger.log("Received data: " + JSON.stringify(data));
     
     // Validate required data
     if (!data.code) {
-      resp = createResponse(false, "Missing QR code data");
-      return setCorsHeaders(resp);
+      return createResponse(false, "Missing QR code data");
     }
     
     if (!data.mode) {
-      resp = createResponse(false, "Missing mode data");
-      return setCorsHeaders(resp);
+      return createResponse(false, "Missing mode data");
     }
     
     // Get the active spreadsheet
@@ -141,8 +109,7 @@ function doPost(e) {
     const sheet = spreadsheet.getSheetByName("Sheet1");
     
     if (!sheet) {
-      resp = createResponse(false, "Sheet1 not found in the spreadsheet");
-      return setCorsHeaders(resp);
+      return createResponse(false, "Sheet1 not found in the spreadsheet");
     }
     
     // Find the row with the matching code in column A (was column G)
@@ -157,8 +124,7 @@ function doPost(e) {
     }
     
     if (foundRow === -1) {
-      resp = createResponse(false, "Code not found in spreadsheet");
-      return setCorsHeaders(resp);
+      return createResponse(false, "Code not found in spreadsheet");
     }
     
     // Get current timestamp in local timezone
@@ -203,23 +169,19 @@ function doPost(e) {
         Logger.log("Goodie Bag already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
       }
     } else {
-      resp = createResponse(false, "Invalid mode: " + data.mode);
-      return setCorsHeaders(resp);
+      return createResponse(false, "Invalid mode: " + data.mode);
     }
     
     // You can also log the scan in a dedicated log sheet
     logScan(data, foundRow, timestamp);
     
     // Return success response
-    resp = createResponse(true, "QR code processed successfully for mode: " + data.mode);
+    return createResponse(true, "QR code processed successfully for mode: " + data.mode);
     
   } catch (error) {
     Logger.log("Error: " + error.toString());
-    resp = createResponse(false, "Error processing request: " + error.toString());
+    return createResponse(false, "Error processing request: " + error.toString());
   }
-  
-  // Add CORS headers
-  return setCorsHeaders(resp);
 }
 
 // Helper function to log scans in a separate sheet for historical records
@@ -259,9 +221,7 @@ function createResponse(success, message, data = null) {
     response.data = data;
   }
   
-  var output = ContentService
+  return ContentService
     .createTextOutput(JSON.stringify(response))
     .setMimeType(ContentService.MimeType.JSON);
-    
-  return output;
 }
