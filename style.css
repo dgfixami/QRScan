@@ -548,3 +548,150 @@ img[alt="Info icon"] {
     color: #666;
     font-style: italic;
 }
+
+/* Authentication styles */
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    padding: 20px;
+}
+
+.auth-box {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-box h2 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.auth-box p {
+    margin-bottom: 25px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.auth-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px 15px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #444;
+    margin: 0 auto;
+    cursor: pointer;
+    transition: background-color 0.3s, box-shadow 0.3s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.auth-button:hover {
+    background-color: #f5f5f5;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.auth-button img {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+}
+
+.auth-error {
+    background-color: #ffebee;
+    color: #d32f2f;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.content-container {
+    opacity: 1;
+    transition: opacity 0.5s ease;
+}
+
+.content-container.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* User info styles */
+.user-info {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    background-color: white;
+    border-radius: 30px;
+    padding: 5px 15px 5px 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.profile-image {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+    object-fit: cover;
+}
+
+.user-details {
+    text-align: left;
+}
+
+.user-name {
+    font-weight: bold;
+    font-size: 16px;
+    margin: 0;
+    color: #333;
+}
+
+.user-email {
+    font-size: 14px;
+    margin: 0;
+    color: #666;
+}
+
+.user-controls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.signout-button {
+    background-color: transparent;
+    border: 1px solid #d32f2f;
+    color: #d32f2f;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.signout-button:hover {
+    background-color: rgba(211, 47, 47, 0.1);
+}
+
+/* Log entry style for auth messages */
+.log-entry.auth {
+    color: #7b1fa2;
+    background-color: #f3e5f5;
+    border-left: 3px solid #7b1fa2;
+    padding-left: 7px;
+}
