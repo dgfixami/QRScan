@@ -505,12 +505,6 @@ function initializeQrScanner(userProfile) {
             timestamp: new Date().toISOString()
         };
         
-        // Add user information to the scan data
-        if (userProfile) {
-            scanData.userName = userProfile.name;
-            scanData.userEmail = userProfile.email;
-        }
-        
         // Update UI to show the current action
         modeValue.textContent = actionMode;
         if (modeToggle) {
@@ -534,12 +528,6 @@ function initializeQrScanner(userProfile) {
     function sendToGoogleSheets(scanData, callback) {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
-        
-        // Add user information to the scan data
-        if (userProfile) {
-            scanData.userName = userProfile.name;
-            scanData.userEmail = userProfile.email;
-        }
         
         // Create a form with the scan data that will be submitted to the web app
         const form = document.createElement('form');
@@ -890,12 +878,6 @@ function initializeQrScanner(userProfile) {
                 mode: currentMode,
                 timestamp: new Date().toISOString()
             };
-            
-            // Add user information to the scan data
-            if (userProfile) {
-                scanData.userName = userProfile.name;
-                scanData.userEmail = userProfile.email;
-            }
             
             // Log locally first
             logToPage(`Successfully scanned: ${decodedText} (${currentMode})`, 'success');

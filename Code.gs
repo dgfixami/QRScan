@@ -208,7 +208,6 @@ function doPost(e) {
     }
     
     // You can also log the scan in a dedicated log sheet
-    // Pass the user information to the logScan function
     logScan(data, foundRow, timestamp);
     
     // Return success response
@@ -232,23 +231,17 @@ function logScan(data, rowNumber, timestamp) {
     let logSheet = spreadsheet.getSheetByName("ScanLog");
     if (!logSheet) {
       logSheet = spreadsheet.insertSheet("ScanLog");
-      // Add headers with new User Name column
-      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status", "User Name", "User Email"]);
+      // Add headers
+      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status"]);
     }
     
-    // Get user information from the data
-    const userName = data.userName || "Unknown";
-    const userEmail = data.userEmail || "Unknown";
-    
-    // Append the scan data including user information
+    // Append the scan data
     logSheet.appendRow([
       timestamp, 
       data.code, 
       data.mode,
       rowNumber > 0 ? rowNumber : "Not Found",
-      rowNumber > 0 ? "Updated" : "Not Found",
-      userName,
-      userEmail
+      rowNumber > 0 ? "Updated" : "Not Found"
     ]);
   } catch (error) {
     Logger.log("Error logging scan: " + error.toString());
