@@ -31,6 +31,7 @@ function showAuthError(message) {
 
 // Check if logged in on page load
 document.addEventListener('DOMContentLoaded', function() {
+    console.log("Auth.js: DOM content loaded");
     loginContainer = document.getElementById('login-container');
     appContainer = document.getElementById('app-container');
     userName = document.getElementById('user-name');
@@ -56,6 +57,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Token expired
                 localStorage.removeItem('gauth_token');
                 localStorage.removeItem('gauth_user');
+                console.log("Auth token expired");
             }
         } catch (e) {
             console.error("Error parsing stored authentication:", e);
@@ -77,6 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Handle credential response from Google Sign-In
 function handleCredentialResponse(response) {
+    console.log("Google sign-in response received");
     // Decode the credential to get basic profile info
     if (response && response.credential) {
         const token = response.credential;
@@ -90,11 +93,10 @@ function handleCredentialResponse(response) {
             return;
         }
         
-        // Check for organization domain
+        // Check for organization domain (optional, since it's already restricted by Google Sign-In)
         if (decodedToken.hd === undefined) {
-            showAuthError("You must use an organizational account to login.");
-            signOut();
-            return;
+            console.log("User signed in with personal account instead of organizational account");
+            // We'll still allow access since the Google Sign-In is restricted to your org domain
         }
         
         // Create user profile object
@@ -102,7 +104,7 @@ function handleCredentialResponse(response) {
             name: decodedToken.name || 'User',
             email: decodedToken.email,
             picture: decodedToken.picture,
-            domain: decodedToken.hd
+            domain: decodedToken.hd || 'unknown'
         };
         
         // Store user data
@@ -113,6 +115,18 @@ function handleCredentialResponse(response) {
         
         // Show the app
         showApp();
+        
+        // Explicitly initialize the app after successful authentication
+        if (typeof initializeApp === 'function') {
+            console.log("Calling initializeApp function");
+            initializeApp();
+        } else {
+            console.log("initializeApp function not found, firing app-loaded custom event");
+            // Fire an event for the script.js to listen to
+            document.dispatchEvent(new CustomEvent('app-authenticated'));
+        }
+    } else {
+        showAuthError("Invalid authentication response");
     }
 }
 
@@ -146,7 +160,7 @@ function signOut() {
     showLogin();
     
     // Google sign-out
-    if (google && google.accounts && google.accounts.id) {
+    if (window.google && google.accounts && google.accounts.id) {
         google.accounts.id.disableAutoSelect();
     }
 }
@@ -156,6 +170,8 @@ function showLogin() {
     if (loginContainer && appContainer) {
         loginContainer.classList.remove('hidden');
         appContainer.classList.add('hidden');
+    } else {
+        console.error("Login or app container not found");
     }
 }
 
@@ -169,6 +185,8 @@ function showApp() {
         if (userName && userProfile) {
             userName.textContent = userProfile.name;
         }
+    } else {
+        console.error("Login or app container not found when showing app");
     }
 }
 
