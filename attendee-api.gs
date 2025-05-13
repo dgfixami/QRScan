@@ -4,13 +4,18 @@
 
 // Define the doGet function to handle GET requests for attendee details
 function doGet(e) {
+  // Handle OPTIONS request for CORS preflight
+  if (e.method === 'OPTIONS') {
+    return handleOptions();
+  }
+  
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    return handleAttendeeSearch(e.parameter.code);
+    return addCorsHeaders(handleAttendeeSearch(e.parameter.code));
   }
   
   // Default response for simple testing
-  return ContentService.createTextOutput("Attendee Search API is running");
+  return addCorsHeaders(ContentService.createTextOutput("Attendee Search API is running"));
 }
 
 // Function to handle attendee lookups by QR code
@@ -24,8 +29,8 @@ function handleAttendeeSearch(code) {
       return createResponse(false, "Sheet not found in the spreadsheet");
     }
     
-    // Find the row with the matching code in column H (was column G)
-    const dataRange = sheet.getRange("H:H").getValues();
+    // Find the row with the matching code in column A (not column H as previously written)
+    const dataRange = sheet.getRange("A:A").getValues();
     let foundRow = -1;
     
     for (let i = 0; i < dataRange.length; i++) {
@@ -39,26 +44,26 @@ function handleAttendeeSearch(code) {
       return createResponse(false, "QR code not found in spreadsheet");
     }
     
-    // Get the attendee data from columns A, B, C, D for timestamp, firstname, lastname, and email
-    // Make sure to start from column A
-    const rowData = sheet.getRange(foundRow, 1, 1, 4).getValues()[0];
+    // Get the attendee data from columns F, G for name and email
+    // Get the timestamp from column H
+    const rowData = sheet.getRange(foundRow, 1, 1, 8).getValues()[0];
     
     // Format timestamp if it's a date
-    let timestamp = rowData[0] || "";
+    let timestamp = rowData[7] || ""; // Column H (timestamp)
     if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
       const timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
       // Get day of the week
       const dayOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][timestamp.getDay()];
       const formattedDate = Utilities.formatDate(timestamp, timezone, "dd/MM/yyyy");
       timestamp = dayOfWeek + " " + formattedDate; // Format with day name
-    }n A (timestamp)
-      firstname: rowData[1] || "",   // Column B (firstname)
-      lastname: rowData[2] || "",    // Column C (lastname)
-      email: rowData[3] || ""        // Column D (em
+    }
     
     // Format the data for response
     const attendeeData = {
-      timestamp: timestamp,          // Columail)
+      timestamp: timestamp,          // Column H (timestamp)
+      firstname: rowData[5] || "",   // Column F (name) - using as firstname
+      lastname: "",                  // No separate lastname in your data structure
+      email: rowData[6] || ""        // Column G (email)
     };
     
     // Return the data
@@ -81,7 +86,37 @@ function createResponse(success, message, data = null) {
     response.data = data;
   }
   
-  return ContentService
+  return addCorsHeaders(ContentService
     .createTextOutput(JSON.stringify(response))
-    .setMimeType(ContentService.MimeType.JSON);
+    .setMimeType(ContentService.MimeType.JSON));
+}
+
+// Add CORS headers handler functions
+function addCorsHeaders(output) {
+  // If output is already a TextOutput object
+  if (output.getContentType && output.getContentType() === ContentService.MimeType.JSON) {
+    return output
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+      .setHeader('Access-Control-Max-Age', '3600');
+  }
+  
+  // If output is not a TextOutput object, convert it
+  const text = (typeof output === 'object') ? JSON.stringify(output) : String(output);
+  return ContentService.createTextOutput(text)
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    .setHeader('Access-Control-Max-Age', '3600');
+}
+
+function handleOptions() {
+  return ContentService.createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    .setHeader('Access-Control-Max-Age', '3600');
 }

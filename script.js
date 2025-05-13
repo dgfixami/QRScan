@@ -102,7 +102,6 @@ function initializeQrScanner(userProfile) {
     let isScanning = false;
     
     // Google Apps Script web app URLs - one for check-in/goodie bag, one for attendee details
-    // Modified to use JSONP approach to avoid CORS issues
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
     const attendeeApiUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
     
@@ -288,97 +287,114 @@ function initializeQrScanner(userProfile) {
         fetchAttendeeData(code);
     }
     
-    // New function to fetch attendee details from the second API
-    function fetchAttendeeDetails(code) {
-        logToPage(`Fetching attendee details for code: ${code}`, 'info');
-        
-        return fetch(`${attendeeApiUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (!data.success) {
-                    throw new Error(data.message || "Failed to retrieve attendee details");
-                }
-                
-                // Log the actual response for debugging
-                console.log("Attendee API response:", data);
-                
-                // Format name from firstname and lastname fields
-                const firstname = data.data.firstname || "";
-                const lastname = data.data.lastname || "";
-                const fullName = [firstname, lastname].filter(Boolean).join(' ');
-                
-                // Get the timestamp from column A
-                const timestamp = data.data.timestamp || "";
-                
-                // Log the extracted details
-                logToPage(`Found attendee: ${fullName}`, 'info');
-                
-                return {
-                    name: fullName,
-                    email: data.data.email || "",
-                    code: code,
-                    timestamp: timestamp // Include the timestamp from column A
-                };
-            })
-            .catch(error => {
-                logToPage(`Error fetching attendee details: ${error.message}`, 'error');
-                throw error; // Re-throw to be handled by the caller
-            });
-    }
-    
     // Function to fetch attendee data from Google Sheets for manual lookup only
     function fetchAttendeeData(code) {
         // Show that we're loading
         lookupResult.innerHTML = '<div class="loading">Loading...</div>';
         lookupResult.classList.remove('hidden');
         
-        // First get check-in/goodie bag status from first API
-        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    showLookupError(data.message || 'Failed to find check-in status');
-                    logToPage(`Lookup failed: ${data.message}`, 'error');
-                    return null;
-                }
-                
-                const checkInData = data.data;
-                
-                // Then get attendee details from second API
-                return fetchAttendeeDetails(code)
-                    .then(attendeeDetails => {
-                        // Combine data from both APIs
-                        const combinedData = {
-                            ...checkInData,
-                            name: attendeeDetails.name,
-                            email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
-                        };
-                        
-                        // Display the combined data
-                        displayAttendeeData(combinedData);
-                        logToPage(`Successfully retrieved data for code: ${code}`, 'success');
-                    })
-                    .catch(error => {
-                        // If we can't get attendee details, still show check-in data
-                        displayAttendeeData({
-                            ...checkInData,
-                            name: "Unknown",
-                            email: "Unknown",
-                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
-                        });
-                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
+        // Use fetch with CORS mode explicitly set
+        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`, {
+            method: 'GET',
+            mode: 'cors', // Explicitly request CORS
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                showLookupError(data.message || 'Failed to find check-in status');
+                logToPage(`Lookup failed: ${data.message}`, 'error');
+                return null;
+            }
+            
+            const checkInData = data.data;
+            
+            // Then get attendee details from second API with explicit CORS mode
+            return fetchAttendeeDetails(code)
+                .then(attendeeDetails => {
+                    // Combine data from both APIs
+                    const combinedData = {
+                        ...checkInData,
+                        name: attendeeDetails.name,
+                        email: attendeeDetails.email,
+                        timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
+                    };
+                    
+                    // Display the combined data
+                    displayAttendeeData(combinedData);
+                    logToPage(`Successfully retrieved data for code: ${code}`, 'success');
+                })
+                .catch(error => {
+                    // If we can't get attendee details, still show check-in data
+                    displayAttendeeData({
+                        ...checkInData,
+                        name: "Unknown",
+                        email: "Unknown",
+                        timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                     });
-            })
-            .catch(error => {
-                showLookupError('Error connecting to database');
-                logToPage(`Lookup error: ${error.message}`, 'error');
-            });
+                    logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
+                });
+        })
+        .catch(error => {
+            showLookupError('Error connecting to database');
+            logToPage(`Lookup error: ${error.message}`, 'error');
+        });
+    }
+    
+    // New function to fetch attendee details from the second API
+    function fetchAttendeeDetails(code) {
+        logToPage(`Fetching attendee details for code: ${code}`, 'info');
+        
+        return fetch(`${attendeeApiUrl}?code=${encodeURIComponent(code)}`, {
+            method: 'GET',
+            mode: 'cors', // Explicitly request CORS
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || "Failed to retrieve attendee details");
+            }
+            
+            // Log the actual response for debugging
+            console.log("Attendee API response:", data);
+            
+            // Format name from firstname and lastname fields
+            const firstname = data.data.firstname || "";
+            const lastname = data.data.lastname || "";
+            const fullName = [firstname, lastname].filter(Boolean).join(' ');
+            
+            // Get the timestamp from column A
+            const timestamp = data.data.timestamp || "";
+            
+            // Log the extracted details
+            logToPage(`Found attendee: ${fullName}`, 'info');
+            
+            return {
+                name: fullName,
+                email: data.data.email || "",
+                code: code,
+                timestamp: timestamp // Include the timestamp from column A
+            };
+        })
+        .catch(error => {
+            logToPage(`Error fetching attendee details: ${error.message}`, 'error');
+            throw error; // Re-throw to be handled by the caller
+        });
     }
     
     // Add a function to check if a code is eligible for a goodie bag
@@ -529,75 +545,47 @@ function initializeQrScanner(userProfile) {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
         
-        // Create a form with the scan data that will be submitted to the web app
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.target = 'hidden-iframe';
-        form.action = scriptUrl;
-        form.style.display = 'none';
-        
-        // Add the data as form fields
-        const dataField = document.createElement('input');
-        dataField.type = 'hidden';
-        dataField.name = 'data';
-        dataField.value = JSON.stringify(scanData);
-        form.appendChild(dataField);
-        
-        // Create hidden iframe to receive the response
-        let iframe = document.getElementById('hidden-iframe');
-        if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.name = 'hidden-iframe';
-            iframe.id = 'hidden-iframe';
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-        }
-        
-        // Set up message listening for response from iframe
-        window.addEventListener('message', function receiveMessage(event) {
-            // Only process messages from our script domains
-            if (event.origin.includes('script.google.com')) {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.status === 'success') {
-                        logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
-                    } else {
-                        logToPage(`Error from Google Sheets: ${data.message}`, 'error');
-                        alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
-                    }
-                } catch (e) {
-                    console.log('Received non-JSON message from iframe', event.data);
-                }
-                
-                // Clean up
-                window.removeEventListener('message', receiveMessage);
-                
-                // Execute callback
-                if (typeof callback === 'function') {
-                    callback();
-                } else {
-                    unlockScanner();
-                }
+        // Use fetch with proper headers instead of form submission
+        fetch(scriptUrl, {
+            method: 'POST',
+            mode: 'cors', // Explicitly request CORS
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(scanData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
-        });
-        
-        // Add form to body and submit it
-        document.body.appendChild(form);
-        form.submit();
-        
-        // Remove form after submission
-        setTimeout(() => {
-            document.body.removeChild(form);
-        }, 100);
-        
-        // Set a timeout to ensure unlock happens even if there's no response
-        setTimeout(() => {
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
+            } else {
+                logToPage(`Error from Google Sheets: ${data.message}`, 'error');
+                alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
+            }
+            
+            // Execute callback
             if (typeof callback === 'function') {
                 callback();
             } else {
                 unlockScanner();
             }
-        }, 5000);
+        })
+        .catch(error => {
+            logToPage(`Error sending data: ${error.message}`, 'error');
+            
+            // Still execute callback on error to ensure UI doesn't get stuck
+            if (typeof callback === 'function') {
+                callback();
+            } else {
+                unlockScanner();
+            }
+        });
     }
     
     // Show lookup error

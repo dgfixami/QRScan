@@ -4,13 +4,18 @@
 
 // Define the doGet function to handle GET requests from testing
 function doGet(e) {
+  // Handle OPTIONS request for CORS preflight
+  if (e.method === 'OPTIONS') {
+    return handleOptions();
+  }
+  
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    return handleLookup(e.parameter.code);
+    return addCorsHeaders(handleLookup(e.parameter.code));
   }
   
   // Default response for simple testing
-  return ContentService.createTextOutput("QR Code API is running");
+  return addCorsHeaders(ContentService.createTextOutput("QR Code API is running"));
 }
 
 // Update handleLookup function for new column structure
@@ -49,7 +54,7 @@ function handleLookup(code) {
     let goodieBagTime = rowData[4] || ""; // Column E (was column L)
     let timestamp = rowData[7] || ""; // Column H (timestamp)
     
-    // Only format if they are date objects
+    // Enhanced date formatting with day of week
     if (checkInTime instanceof Date && !isNaN(checkInTime.getTime())) {
       checkInTime = Utilities.formatDate(checkInTime, timezone, "dd/MM/yyyy HH:mm:ss");
     }
@@ -88,7 +93,18 @@ function handleLookup(code) {
 
 // Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
+  // Handle OPTIONS request for CORS preflight
+  if (e.method === 'OPTIONS') {
+    return handleOptions();
+  }
+  
   try {
+    // Handle CORS preflight requests
+    if (e.postData === undefined) {
+      return addCorsHeaders(ContentService.createTextOutput('{"success":false,"message":"No data received"}')
+        .setMimeType(ContentService.MimeType.JSON));
+    }
+    
     // Parse the incoming data
     const data = JSON.parse(e.postData.contents);
     
@@ -97,11 +113,11 @@ function doPost(e) {
     
     // Validate required data
     if (!data.code) {
-      return createResponse(false, "Missing QR code data");
+      return addCorsHeaders(createResponse(false, "Missing QR code data"));
     }
     
     if (!data.mode) {
-      return createResponse(false, "Missing mode data");
+      return addCorsHeaders(createResponse(false, "Missing mode data"));
     }
     
     // Get the active spreadsheet
@@ -109,7 +125,7 @@ function doPost(e) {
     const sheet = spreadsheet.getSheetByName("Sheet1");
     
     if (!sheet) {
-      return createResponse(false, "Sheet1 not found in the spreadsheet");
+      return addCorsHeaders(createResponse(false, "Sheet1 not found in the spreadsheet"));
     }
     
     // Find the row with the matching code in column A (was column G)
@@ -124,7 +140,7 @@ function doPost(e) {
     }
     
     if (foundRow === -1) {
-      return createResponse(false, "Code not found in spreadsheet");
+      return addCorsHeaders(createResponse(false, "Code not found in spreadsheet"));
     }
     
     // Get current timestamp in local timezone
@@ -169,18 +185,18 @@ function doPost(e) {
         Logger.log("Goodie Bag already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
       }
     } else {
-      return createResponse(false, "Invalid mode: " + data.mode);
+      return addCorsHeaders(createResponse(false, "Invalid mode: " + data.mode));
     }
     
     // You can also log the scan in a dedicated log sheet
     logScan(data, foundRow, timestamp);
     
-    // Return success response
-    return createResponse(true, "QR code processed successfully for mode: " + data.mode);
+    // Return success response with CORS headers
+    return addCorsHeaders(createResponse(true, "QR code processed successfully for mode: " + data.mode));
     
   } catch (error) {
     Logger.log("Error: " + error.toString());
-    return createResponse(false, "Error processing request: " + error.toString());
+    return addCorsHeaders(createResponse(false, "Error processing request: " + error.toString()));
   }
 }
 
@@ -224,4 +240,34 @@ function createResponse(success, message, data = null) {
   return ContentService
     .createTextOutput(JSON.stringify(response))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Add CORS headers handler functions
+function addCorsHeaders(output) {
+  // If output is already a TextOutput object
+  if (output.getContentType && output.getContentType() === ContentService.MimeType.JSON) {
+    return output
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+      .setHeader('Access-Control-Max-Age', '3600');
+  }
+  
+  // If output is not a TextOutput object, convert it
+  const text = (typeof output === 'object') ? JSON.stringify(output) : String(output);
+  return ContentService.createTextOutput(text)
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    .setHeader('Access-Control-Max-Age', '3600');
+}
+
+function handleOptions() {
+  return ContentService.createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    .setHeader('Access-Control-Max-Age', '3600');
 }
