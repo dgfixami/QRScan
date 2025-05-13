@@ -86,7 +86,7 @@ function handleLookup(code) {
   }
 }
 
-// Updated doPost function to handle POST requests with user information
+// Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
   try {
     // Parse the incoming data
@@ -104,10 +104,6 @@ function doPost(e) {
       return createResponse(false, "Missing mode data");
     }
     
-    // Extract user information if available
-    const userName = data.user && data.user.name ? data.user.name : "Unknown user";
-    const userEmail = data.user && data.user.email ? data.user.email : "Unknown email";
-    
     // Get the active spreadsheet
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = spreadsheet.getSheetByName("Sheet1");
@@ -116,7 +112,7 @@ function doPost(e) {
       return createResponse(false, "Sheet1 not found in the spreadsheet");
     }
     
-    // Find the row with the matching code in column A
+    // Find the row with the matching code in column A (was column G)
     const dataRange = sheet.getRange("A:A").getValues();
     let foundRow = -1;
     
@@ -176,8 +172,8 @@ function doPost(e) {
       return createResponse(false, "Invalid mode: " + data.mode);
     }
     
-    // Update the log scan function to include user info
-    logScan(data, foundRow, timestamp, userName, userEmail);
+    // You can also log the scan in a dedicated log sheet
+    logScan(data, foundRow, timestamp);
     
     // Return success response
     return createResponse(true, "QR code processed successfully for mode: " + data.mode);
@@ -188,8 +184,8 @@ function doPost(e) {
   }
 }
 
-// Updated helper function to log scans with user information
-function logScan(data, rowNumber, timestamp, userName, userEmail) {
+// Helper function to log scans in a separate sheet for historical records
+function logScan(data, rowNumber, timestamp) {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
@@ -197,19 +193,17 @@ function logScan(data, rowNumber, timestamp, userName, userEmail) {
     let logSheet = spreadsheet.getSheetByName("ScanLog");
     if (!logSheet) {
       logSheet = spreadsheet.insertSheet("ScanLog");
-      // Add headers with user columns
-      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status", "User Name", "User Email"]);
+      // Add headers
+      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status"]);
     }
     
-    // Append the scan data including user info
+    // Append the scan data
     logSheet.appendRow([
       timestamp, 
       data.code, 
       data.mode,
       rowNumber > 0 ? rowNumber : "Not Found",
-      rowNumber > 0 ? "Updated" : "Not Found",
-      userName || "Unknown",
-      userEmail || "Unknown"
+      rowNumber > 0 ? "Updated" : "Not Found"
     ]);
   } catch (error) {
     Logger.log("Error logging scan: " + error.toString());
