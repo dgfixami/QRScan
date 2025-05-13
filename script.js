@@ -789,67 +789,12 @@ document.addEventListener('DOMContentLoaded', function() {
         codeValue.style.color = "";
     });
     
-    // Wait for appReady event before initializing camera
-    document.addEventListener('appReady', function() {
-        logToPage('App is ready, initializing camera...', 'info');
-        // Set a slightly longer delay to ensure browser has time to process
-        setTimeout(() => {
-            initializeCameras();
-        }, 1000);
-    });
+    setTimeout(() => {
+        initializeCameras();
+    }, 500);
     
-    // Add new function to check camera permissions explicitly
-    async function checkCameraPermissions() {
-        try {
-            logToPage('Checking camera permissions...', 'info');
-            
-            // Try to access camera to trigger permission dialog
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            
-            // If we get here, permission was granted
-            logToPage('Camera permission granted', 'success');
-            
-            // Close the stream properly to avoid resource leaks
-            stream.getTracks().forEach(track => {
-                track.stop();
-            });
-            
-            return true;
-        } catch (error) {
-            logToPage(`Camera permission error: ${error.message}`, 'error');
-            
-            // Add a button to retry permission request
-            const permissionBtn = document.createElement('button');
-            permissionBtn.id = 'permission-btn';
-            permissionBtn.className = 'retry-button';
-            permissionBtn.textContent = 'Grant Camera Permission';
-            permissionBtn.addEventListener('click', async () => {
-                const result = await checkCameraPermissions();
-                if (result) {
-                    permissionBtn.remove();
-                    initializeCameras();
-                }
-            });
-            
-            // Add the button to the reader container if it doesn't already exist
-            if (!document.getElementById('permission-btn')) {
-                reader.parentNode.insertBefore(permissionBtn, reader);
-            }
-            
-            return false;
-        }
-    }
-    
-    // Modify initializeCameras to check permissions first
     async function initializeCameras() {
         try {
-            // Check permissions before attempting to get cameras
-            const hasPermission = await checkCameraPermissions();
-            if (!hasPermission) {
-                logToPage('Waiting for camera permission', 'warning');
-                return; // Exit function until permission is granted
-            }
-            
             logToPage('Getting available cameras...');
             
             Html5Qrcode.getCameras().then(devices => {
@@ -910,15 +855,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function startScanner(cameraId) {
         if (html5QrCode && html5QrCode.isScanning) {
             html5QrCode.stop().then(() => {
-                setTimeout(() => {
-                    initScanner(cameraId);
-                }, 300); // Add slight delay after stopping before reinitializing
+                initScanner(cameraId);
             }).catch(err => {
                 logToPage(`Error stopping current scanner: ${err.message}`, 'error');
                 html5QrCode = null;
-                setTimeout(() => {
-                    initScanner(cameraId);
-                }, 300);
+                initScanner(cameraId);
             });
         } else {
             initScanner(cameraId);
@@ -929,65 +870,47 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             logToPage(`Initializing scanner with camera ID: ${cameraId}`);
             
-            // Clear any previous instance
-            if (html5QrCode) {
-                try {
-                    html5QrCode.clear();
-                } catch (e) {
-                    console.error("Error clearing scanner:", e);
-                }
-            }
-            
             html5QrCode = new Html5Qrcode("reader");
             
-            // Improved config with higher FPS and better detection
             const config = {
-                fps: 15, // Increased from 10
+                fps: 10,
                 qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0,
-                formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ]
+                aspectRatio: 1.0
             };
             
-            // Make reader element visible before starting camera
-            document.getElementById('reader').style.display = 'block';
-            
-            // Start the camera with a slight delay to ensure DOM is ready
-            setTimeout(() => {
-                html5QrCode.start(
-                    cameraId, 
-                    config,
-                    qrCodeSuccessCallback,
-                    qrCodeErrorCallback
-                ).then(() => {
-                    logToPage('Camera started successfully', 'success');
-                    cameraInitAttempts = 0;
-                    
-                    let flash = document.querySelector('.camera-flash');
-                    if (!flash) {
-                        flash = document.createElement('div');
-                        flash.className = 'camera-flash';
-                        reader.appendChild(flash);
-                    }
-                    
-                    const existingRetryBtn = document.getElementById('retry-camera-btn');
-                    if (existingRetryBtn) {
-                        existingRetryBtn.remove();
-                    }
-                    
-                }).catch(err => {
-                    logToPage(`Failed to start camera: ${err.message}`, 'error');
-                    
-                    if (cameraInitAttempts < MAX_INIT_ATTEMPTS) {
-                        cameraInitAttempts++;
-                        logToPage('Trying alternative camera method...', 'info');
-                        startFallbackScanner();
-                    } else {
-                        showError(`Camera start failed after ${MAX_INIT_ATTEMPTS} attempts`);
-                        addRetryButton();
-                    }
-                });
-            }, 200);
-            
+            html5QrCode.start(
+                cameraId, 
+                config,
+                qrCodeSuccessCallback,
+                qrCodeErrorCallback
+            ).then(() => {
+                logToPage('Camera started successfully', 'success');
+                cameraInitAttempts = 0;
+                
+                let flash = document.querySelector('.camera-flash');
+                if (!flash) {
+                    flash = document.createElement('div');
+                    flash.className = 'camera-flash';
+                    reader.appendChild(flash);
+                }
+                
+                const existingRetryBtn = document.getElementById('retry-camera-btn');
+                if (existingRetryBtn) {
+                    existingRetryBtn.remove();
+                }
+                
+            }).catch(err => {
+                logToPage(`Failed to start camera: ${err.message}`, 'error');
+                
+                if (cameraInitAttempts < MAX_INIT_ATTEMPTS) {
+                    cameraInitAttempts++;
+                    logToPage('Trying alternative camera method...', 'info');
+                    startFallbackScanner();
+                } else {
+                    showError(`Camera start failed after ${MAX_INIT_ATTEMPTS} attempts`);
+                    addRetryButton();
+                }
+            });
         } catch (error) {
             logToPage(`Scanner initialization error: ${error.message}`, 'error');
             addRetryButton();
@@ -1004,46 +927,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 );
             }
             
-            // Clear any previous instance
-            if (html5QrCode) {
-                try {
-                    html5QrCode.clear();
-                } catch (e) {
-                    console.error("Error clearing scanner:", e);
-                }
-            }
-            
             html5QrCode = new Html5Qrcode("reader");
             
-            // Add a small delay before starting the camera
-            setTimeout(() => {
-                html5QrCode.start(
-                    { facingMode: "environment" },
-                    {
-                        fps: 15, // Increased from 10
-                        qrbox: { width: 250, height: 250 },
-                        aspectRatio: 1.0,
-                        formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ]
-                    },
-                    qrCodeSuccessCallback,
-                    qrCodeErrorCallback
-                ).then(() => {
-                    logToPage('Fallback camera method succeeded', 'success');
-                    cameraInitAttempts = 0;
-                    
-                    let flash = document.querySelector('.camera-flash');
-                    if (!flash) {
-                        flash = document.createElement('div');
-                        flash.className = 'camera-flash';
-                        reader.appendChild(flash);
-                    }
-                    
-                }).catch(err => {
-                    logToPage(`Fallback camera method failed: ${err.message}`, 'error');
-                    showError("Could not access camera. Please ensure camera permissions are granted.");
-                    addRetryButton();
-                });
-            }, 200);
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                },
+                qrCodeSuccessCallback,
+                qrCodeErrorCallback
+            ).then(() => {
+                logToPage('Fallback camera method succeeded', 'success');
+                cameraInitAttempts = 0;
+                
+                let flash = document.querySelector('.camera-flash');
+                if (!flash) {
+                    flash = document.createElement('div');
+                    flash.className = 'camera-flash';
+                    reader.appendChild(flash);
+                }
+                
+            }).catch(err => {
+                logToPage(`Fallback camera method failed: ${err.message}`, 'error');
+                showError("Could not access camera. Please ensure camera permissions are granted.");
+                addRetryButton();
+            });
         } catch (error) {
             logToPage(`Fallback scanner error: ${error.message}`, 'error');
             showError("Camera initialization failed completely. Please try refreshing the page.");
@@ -1120,14 +1030,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    
-    // If the app is already visible (user was already authenticated), trigger initialization
-    if (document.getElementById('app-container').style.display === 'block') {
-        logToPage('App already visible, triggering camera initialization', 'info');
-        setTimeout(() => {
-            initializeCameras();
-        }, 1000);
-    }
     
     logToPage('QR Scanner initialized and ready', 'info');
 });

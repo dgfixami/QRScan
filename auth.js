@@ -95,14 +95,6 @@ function showApplication(userData) {
             logout();
         });
     }
-    
-    // Trigger camera initialization after showing the application UI
-    // Wait a short delay to ensure DOM is fully rendered
-    setTimeout(() => {
-        // Dispatch a custom event to signal that the app is ready for camera initialization
-        document.dispatchEvent(new CustomEvent('appReady'));
-        console.log('App ready event dispatched for camera initialization');
-    }, 500);
 }
 
 // Show the login screen
