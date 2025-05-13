@@ -1,28 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if user is authenticated and DOM is ready
-    console.log("DOM Content Loaded - Checking authentication status");
-    
     // Only initialize the scanner if the user is authenticated
     if (!sessionStorage.getItem('qrScannerAuthToken')) {
-        console.log("No auth token found - waiting for login");
         return; // Exit early if not authenticated
-    } 
-    
-    console.log("Auth token found - initializing scanner");
-    
-    // Force check UI state
-    if (document.getElementById('app-container').style.display !== 'block') {
-        console.log("App container not visible, trying to show it");
-        // If we have a token but UI is wrong, try to fix it
-        const userData = JSON.parse(sessionStorage.getItem('qrScannerUserData') || '{}');
-        document.getElementById('login-container').style.display = 'none';
-        document.getElementById('app-container').style.display = 'block';
-        
-        // Display user email if available
-        const userEmail = document.getElementById('user-email');
-        if (userEmail && userData.email) {
-            userEmail.textContent = userData.email;
-        }
     }
     
     const modeToggle = document.getElementById('mode-toggle');
@@ -1151,15 +1130,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     logToPage('QR Scanner initialized and ready', 'info');
-});
-
-// Listen for authentication success events
-document.addEventListener('authSuccess', function(e) {
-    console.log('Auth success event received, initializing app');
-    if (document.getElementById('app-container').style.display === 'block') {
-        console.log('App container is visible, triggering camera initialization');
-        setTimeout(() => {
-            initializeCameras();
-        }, 1000);
-    }
 });
