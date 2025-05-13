@@ -1,5 +1,6 @@
 // Authentication script to ensure users are logged into Google
 let userProfile = null;
+let appInitialized = false;
 
 // Function to initialize Google auth
 function initGoogleAuth() {
@@ -135,12 +136,15 @@ function showApplication() {
         }
         
         // Initialize the QR scanner now that user is authenticated
-        if (typeof initializeQrScanner === 'function') {
-            initializeQrScanner(userProfile);
-        } else {
-            // Create a custom event to notify the main script that authentication is complete
-            const authEvent = new CustomEvent('userAuthenticated', { detail: userProfile });
-            document.dispatchEvent(authEvent);
+        if (!appInitialized) {
+            appInitialized = true;
+            if (typeof initializeQrScanner === 'function') {
+                initializeQrScanner(userProfile);
+            } else {
+                // Create a custom event to notify the main script that authentication is complete
+                const authEvent = new CustomEvent('userAuthenticated', { detail: userProfile });
+                document.dispatchEvent(authEvent);
+            }
         }
     }
 }
@@ -152,19 +156,56 @@ function showAuthError(message) {
     document.getElementById('auth-loading').style.display = 'none';
 }
 
-// Sign out the user
+// Sign out the user with enhanced security
 function signOut() {
-    // Clear any authentication tokens or state
-    userProfile = null;
-    google.accounts.id.disableAutoSelect();
+    // First, dispatch an event to clean up resources (camera, etc.)
+    const signOutEvent = new CustomEvent('userSignOut');
+    document.dispatchEvent(signOutEvent);
     
-    // Reset UI
-    document.getElementById('app-container').style.display = 'none';
+    // Reset authentication state
+    userProfile = null;
+    appInitialized = false;
+    
+    // Disable auto-select to prevent automatic re-login
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+        google.accounts.id.disableAutoSelect();
+    }
+    
+    // Reset UI and remove app content
+    const appContainer = document.getElementById('app-container');
+    
+    // Hide app container first
+    appContainer.style.display = 'none';
+    
+    // Clear all app content
+    // Keep the structure but remove interactive content
+    const logMessages = document.getElementById('log-messages');
+    if (logMessages) logMessages.innerHTML = '';
+    
+    const reader = document.getElementById('reader');
+    if (reader) reader.innerHTML = '';
+    
+    const result = document.getElementById('result');
+    if (result) {
+        const resultSpans = result.querySelectorAll('span');
+        resultSpans.forEach(span => span.textContent = '-');
+    }
+    
+    const lookupResult = document.getElementById('lookup-result');
+    if (lookupResult) lookupResult.innerHTML = '';
+    
+    // Reset form elements
+    const lookupCode = document.getElementById('lookup-code');
+    if (lookupCode) lookupCode.value = '';
+    
+    // Show the auth container again
     document.getElementById('auth-container').style.display = 'flex';
     document.getElementById('auth-error').style.display = 'none';
     
     // Re-initialize Google Sign-In
-    initializeGoogleIdentity();
+    setTimeout(() => {
+        initializeGoogleIdentity();
+    }, 300);
 }
 
 // Initialize authentication when document is ready

@@ -4,11 +4,48 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeQrScanner(event.detail); // Pass the user profile to initialize
     });
     
+    // Listen for sign-out event to clean up resources
+    document.addEventListener('userSignOut', function() {
+        cleanupResources();
+    });
+    
     // Check if already authenticated (for page refreshes)
     if (typeof userProfile !== 'undefined' && userProfile !== null) {
         initializeQrScanner(userProfile);
     }
 });
+
+// Global reference to allow proper cleanup
+let globalHtml5QrCode = null;
+
+// Function to clean up resources when signing out
+function cleanupResources() {
+    // Stop QR scanner if it's running
+    if (globalHtml5QrCode && globalHtml5QrCode.isScanning) {
+        console.log("Stopping QR scanner due to sign-out");
+        globalHtml5QrCode.stop().catch(err => 
+            console.error("Error stopping camera on sign-out:", err)
+        );
+    }
+    
+    // Release camera access
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                // Stop each track to fully release camera
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                });
+                console.log("Camera access revoked due to sign-out");
+            })
+            .catch(() => {
+                // Ignore errors here, as we're just trying to ensure camera is released
+            });
+    }
+    
+    // Reset global reference
+    globalHtml5QrCode = null;
+}
 
 function initializeQrScanner(userProfile) {
     const modeToggle = document.getElementById('mode-toggle');
@@ -671,6 +708,8 @@ function initializeQrScanner(userProfile) {
             logToPage(`Initializing scanner with camera ID: ${cameraId}`);
             
             html5QrCode = new Html5Qrcode("reader");
+            // Store in global reference for proper cleanup
+            globalHtml5QrCode = html5QrCode;
             
             const config = {
                 fps: 10,
@@ -728,6 +767,8 @@ function initializeQrScanner(userProfile) {
             }
             
             html5QrCode = new Html5Qrcode("reader");
+            // Store in global reference for proper cleanup
+            globalHtml5QrCode = html5QrCode;
             
             html5QrCode.start(
                 { facingMode: "environment" },
@@ -1045,6 +1086,26 @@ function initializeQrScanner(userProfile) {
         codeValue.style.color = "red";
         logToPage(message, 'error');
     }
+    
+    // Enhanced beforeunload handler
+    window.addEventListener('beforeunload', () => {
+        cleanupResources();
+    });
+    
+    // Enhanced visibility change handler
+    document.addEventListener('visibilitychange', () => {
+        // Only restart scanner if user is still logged in
+        if (document.visibilityState === 'visible' && userProfile) {
+            if (html5QrCode && !html5QrCode.isScanning) {
+                logToPage('Page visibility restored, checking camera...', 'info');
+                if (cameras.length > 0) {
+                    startScanner(cameras[currentCameraIndex].id);
+                } else {
+                    startFallbackScanner();
+                }
+            }
+        }
+    });
     
     window.addEventListener('beforeunload', () => {
         if (html5QrCode && html5QrCode.isScanning) {

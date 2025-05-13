@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="style.css">
     <!-- Add meta tags for Google authentication -->
     <meta name="google-signin-client_id" content="681607833593-08kg1qc54mq4vn9vghd5rktuktovv5uu.apps.googleusercontent.com">
+    <!-- Add Content Security Policy to enhance security -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://unpkg.com 'unsafe-inline'; connect-src 'self' https://script.google.com https://*.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.googleusercontent.com data:; frame-src 'self' https://accounts.google.com https://script.google.com;">
 </head>
 <body>
     <!-- Authentication container -->
@@ -27,7 +29,7 @@
     </div>
     
     <!-- Main application container (hidden by default until authenticated) -->
-    <div id="app-container" class="container" style="display: none;">
+    <div id="app-container" class="container" style="display: none;" data-auth-required="true">
         <!-- User info bar (new) -->
         <div id="user-info" class="user-info-bar"></div>
         
