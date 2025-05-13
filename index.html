@@ -5,9 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add meta tags for Google authentication -->
+    <meta name="google-signin-client_id" content="681607833593-08kg1qc54mq4vn9vghd5rktuktovv5uu.apps.googleusercontent.com">
 </head>
 <body>
-    <div class="container">
+    <!-- Authentication container -->
+    <div id="auth-container" class="auth-container">
+        <div class="auth-box">
+            <h2>QR Code Scanner Login</h2>
+            <p>Please sign in with your organization Google account to access the application.</p>
+            
+            <div id="google-signin-button" class="signin-button-container"></div>
+            
+            <div id="auth-loading" class="auth-loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Verifying access...</p>
+            </div>
+            
+            <div id="auth-error" class="auth-error" style="display: none;"></div>
+        </div>
+    </div>
+    
+    <!-- Main application container (hidden by default until authenticated) -->
+    <div id="app-container" class="container" style="display: none;">
+        <!-- User info bar (new) -->
+        <div id="user-info" class="user-info-bar"></div>
+        
         <h1>QR Code Scanner</h1>
         
         <div class="toggle-container">
@@ -57,6 +80,10 @@
         </div>
     </div>
     
+    <!-- Load authentication script first -->
+    <script src="auth.js"></script>
+    
+    <!-- Load app scripts after authentication -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="script.js"></script>
 </body>

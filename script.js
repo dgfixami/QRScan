@@ -1,4 +1,11 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if auth is required (it always is now)
+    if (typeof userProfile === 'undefined' || userProfile === null) {
+        // Don't initialize the app yet - wait for authentication
+        console.log('Waiting for user authentication...');
+        return;
+    }
+
     const modeToggle = document.getElementById('mode-toggle');
     const modeValue = document.getElementById('mode-value');
     const codeValue = document.getElementById('code-value');
@@ -762,6 +769,11 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.toggle').classList.remove('disabled');
             logToPage('Toggle re-enabled by safety check', 'info');
         }
+    }
+    
+    // Log a message about authenticated user
+    if (userProfile) {
+        logToPage(`Authenticated as: ${userProfile.name} (${userProfile.email})`, 'info');
     }
     
     modeToggle.addEventListener('change', function() {
