@@ -114,10 +114,21 @@ function checkUserAccess() {
     }
 }
 
-// Show the main application UI
+// Show the main application UI - Fixed to properly display the app
 function showApplication() {
+    console.log('Showing application...');
+    
+    // Hide auth container
     document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'block';
+    
+    // Show app container with proper visibility
+    const appContainer = document.getElementById('app-container');
+    appContainer.style.display = 'block';
+    
+    // Remove the data-auth-required attribute that hides content
+    appContainer.removeAttribute('data-auth-required');
+    // Add authenticated class to ensure visibility
+    appContainer.classList.add('authenticated');
     
     // Update user info if available
     if (userProfile) {
@@ -132,19 +143,29 @@ function showApplication() {
             `;
             
             // Add sign out handler
-            document.getElementById('sign-out-button').addEventListener('click', signOut);
+            const signOutBtn = document.getElementById('sign-out-button');
+            if (signOutBtn) {
+                signOutBtn.addEventListener('click', signOut);
+            }
         }
         
         // Initialize the QR scanner now that user is authenticated
+        // But only if it hasn't been initialized yet
         if (!appInitialized) {
             appInitialized = true;
-            if (typeof initializeQrScanner === 'function') {
-                initializeQrScanner(userProfile);
-            } else {
-                // Create a custom event to notify the main script that authentication is complete
-                const authEvent = new CustomEvent('userAuthenticated', { detail: userProfile });
-                document.dispatchEvent(authEvent);
-            }
+            
+            // Use setTimeout to ensure DOM is ready
+            setTimeout(() => {
+                if (typeof initializeQrScanner === 'function') {
+                    console.log('Initializing QR scanner directly...');
+                    initializeQrScanner(userProfile);
+                } else {
+                    console.log('Dispatching userAuthenticated event...');
+                    // Create a custom event to notify the main script that authentication is complete
+                    const authEvent = new CustomEvent('userAuthenticated', { detail: userProfile });
+                    document.dispatchEvent(authEvent);
+                }
+            }, 100);
         }
     }
 }
@@ -158,6 +179,8 @@ function showAuthError(message) {
 
 // Sign out the user with enhanced security
 function signOut() {
+    console.log('Sign out requested...');
+    
     // First, dispatch an event to clean up resources (camera, etc.)
     const signOutEvent = new CustomEvent('userSignOut');
     document.dispatchEvent(signOutEvent);
@@ -176,6 +199,10 @@ function signOut() {
     
     // Hide app container first
     appContainer.style.display = 'none';
+    // Restore the data-auth-required attribute
+    appContainer.setAttribute('data-auth-required', 'true');
+    // Remove authenticated class
+    appContainer.classList.remove('authenticated');
     
     // Clear all app content
     // Keep the structure but remove interactive content
@@ -210,6 +237,15 @@ function signOut() {
 
 // Initialize authentication when document is ready
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing auth...');
+    
+    // Make sure app container starts hidden properly
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) {
+        appContainer.style.display = 'none';
+        appContainer.setAttribute('data-auth-required', 'true');
+    }
+    
     // Initialize Google auth
     initGoogleAuth();
 });

@@ -81,14 +81,18 @@ body {
 
 /* Additional style to prevent unauthorized access */
 [data-auth-required="true"] {
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity 0.3s;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important; /* Prevent interaction when hidden */
+    transition: opacity 0.3s, visibility 0.3s;
 }
 
-[data-auth-required="true"].authenticated {
-    visibility: visible;
-    opacity: 1;
+[data-auth-required="true"].authenticated,
+.authenticated {
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    display: block !important;
 }
 
 /* User info styles */

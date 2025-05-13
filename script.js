@@ -1,17 +1,24 @@
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded in script.js...');
+    
     // Listen for authentication event
     document.addEventListener('userAuthenticated', function(event) {
+        console.log('Received userAuthenticated event with profile:', event.detail);
         initializeQrScanner(event.detail); // Pass the user profile to initialize
     });
     
     // Listen for sign-out event to clean up resources
     document.addEventListener('userSignOut', function() {
+        console.log('Received userSignOut event, cleaning up resources...');
         cleanupResources();
     });
     
     // Check if already authenticated (for page refreshes)
     if (typeof userProfile !== 'undefined' && userProfile !== null) {
+        console.log('User already authenticated, initializing QR scanner...');
         initializeQrScanner(userProfile);
+    } else {
+        console.log('Waiting for user authentication...');
     }
 });
 
@@ -48,6 +55,16 @@ function cleanupResources() {
 }
 
 function initializeQrScanner(userProfile) {
+    console.log('Initializing QR scanner for user:', userProfile.name);
+    
+    // Make sure app container is visible
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) {
+        appContainer.style.display = 'block';
+        appContainer.classList.add('authenticated');
+        console.log('App container set to visible');
+    }
+    
     const modeToggle = document.getElementById('mode-toggle');
     const modeValue = document.getElementById('mode-value');
     const codeValue = document.getElementById('code-value');
