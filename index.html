@@ -5,59 +5,95 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add Google API library -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <!-- Load authentication script first -->
+    <script src="auth.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>QR Code Scanner</h1>
         
-        <div class="toggle-container">
-            <div class="toggle-with-labels">
-                <span class="toggle-label left-label">Check-in</span>
-                <label class="toggle">
-                    <input type="checkbox" id="mode-toggle">
-                    <span class="slider"></span>
-                </label>
-                <span class="toggle-label right-label">Goodie Bag</span>
+        <!-- Authentication container -->
+        <div id="auth-container" class="auth-container">
+            <div class="auth-box">
+                <h2>Sign In Required</h2>
+                <p>Please sign in with your Google account to use the QR Code Scanner.</p>
+                <div id="auth-error" class="auth-error hidden"></div>
+                <button id="signin-button" class="auth-button">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google logo">
+                    Sign in with Google
+                </button>
             </div>
         </div>
         
-        <div class="scanner-container">
-            <div id="reader"></div>
-        </div>
-        
-        <div class="result-container">
-            <h2>Scan Result</h2>
-            <div id="result">
-                <p>Code: <span id="code-value">-</span></p>
-                <p>Mode: <span id="mode-value">Check-in</span></p>
-                <p>Name: <span id="scan-name">-</span></p>
-                <p>Email: <span id="scan-company">-</span></p>
-                <p>Registered at: <span id="scan-timestamp">-</span></p>
-                <div id="scan-statuses">
-                    <p class="scan-status hidden" id="checkin-status">Check-in: <span id="checkin-status-value">-</span></p>
-                    <p class="scan-status hidden" id="goodiebag-status">Goodie Bag: <span id="goodiebag-status-value">-</span></p>
+        <!-- Main content container (hidden until authenticated) -->
+        <div id="content-container" class="content-container hidden">
+            <!-- User info display -->
+            <div id="user-info" class="user-info"></div>
+            
+            <!-- Sign out button -->
+            <div class="user-controls">
+                <button id="signout-button" class="signout-button">Sign Out</button>
+            </div>
+            
+            <div class="toggle-container">
+                <div class="toggle-with-labels">
+                    <span class="toggle-label left-label">Check-in</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="mode-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label right-label">Goodie Bag</span>
                 </div>
             </div>
             
-            <div class="lookup-container">
-                <h3>Manual Look Up Code</h3>
-                <div class="lookup-form">
-                    <input type="text" id="lookup-code" placeholder="Enter QR Code">
-                    <button id="lookup-button">Search</button>
-                </div>
-                <div id="lookup-result" class="hidden">
-                    <!-- This will be populated dynamically -->
-                </div>
+            <div class="scanner-container">
+                <div id="reader"></div>
             </div>
             
-            <div class="log-container">
-                <h3>Activity Log</h3>
-                <div id="log-messages"></div>
+            <div class="result-container">
+                <h2>Scan Result</h2>
+                <div id="result">
+                    <p>Code: <span id="code-value">-</span></p>
+                    <p>Mode: <span id="mode-value">Check-in</span></p>
+                    <p>Name: <span id="scan-name">-</span></p>
+                    <p>Email: <span id="scan-company">-</span></p>
+                    <p>Registered at: <span id="scan-timestamp">-</span></p>
+                    <div id="scan-statuses">
+                        <p class="scan-status hidden" id="checkin-status">Check-in: <span id="checkin-status-value">-</span></p>
+                        <p class="scan-status hidden" id="goodiebag-status">Goodie Bag: <span id="goodiebag-status-value">-</span></p>
+                    </div>
+                </div>
+                
+                <div class="lookup-container">
+                    <h3>Manual Look Up Code</h3>
+                    <div class="lookup-form">
+                        <input type="text" id="lookup-code" placeholder="Enter QR Code">
+                        <button id="lookup-button">Search</button>
+                    </div>
+                    <div id="lookup-result" class="hidden">
+                        <!-- This will be populated dynamically -->
+                    </div>
+                </div>
+                
+                <div class="log-container">
+                    <h3>Activity Log</h3>
+                    <div id="log-messages"></div>
+                </div>
             </div>
         </div>
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="script.js"></script>
+    
+    <!-- Initialize Google Auth after page loads -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Google Auth
+            initGoogleAuth();
+        });
+    </script>
 </body>
 </html>
