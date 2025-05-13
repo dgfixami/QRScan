@@ -6,6 +6,16 @@
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        window.addEventListener('load', function() {
+            console.log("Window loaded");
+            // Check initial visibility state of containers
+            setTimeout(function() {
+                console.log("Login container display:", document.getElementById('login-container').style.display);
+                console.log("App container display:", document.getElementById('app-container').style.display);
+            }, 1000);
+        });
+    </script>
 </head>
 <body>
     <div class="container" id="app-container" style="display: none;">
