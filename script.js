@@ -911,7 +911,6 @@ function initializeQrScanner(userProfile) {
         }
     }
     
-    // Modified function to fetch attendee data with JSONP fallback
     function fetchAttendeeDataForScan(code, scanData) {
         // Show loading state
         scanName.textContent = "Loading...";
@@ -922,208 +921,104 @@ function initializeQrScanner(userProfile) {
         checkinStatus.classList.add('hidden');
         goodiebagStatus.classList.add('hidden');
         
-        // Use JSONP approach with iframe for data fetching to avoid CORS issues
-        fetchAttendeeDataWithJSONP(code, function(data) {
-            if (!data || !data.success) {
-                // Reset scan result fields if there was an error
-                resetScanResultFields();
-                
-                // Show error for both statuses
-                checkinStatus.classList.remove('hidden');
-                checkinStatusValue.textContent = "Error: " + ((data && data.message) || "Attendee not found");
-                checkinStatusValue.className = "error-text";
-                
-                goodiebagStatus.classList.remove('hidden');
-                goodiebagStatusValue.textContent = "Error: " + ((data && data.message) || "Attendee not found");
-                goodiebagStatusValue.className = "error-text";
-                
-                // Still try to process the scan
-                sendToGoogleSheets(scanData, () => {
-                    // Unlock scanner after operation, even on partial failure
-                    unlockScanner();
-                });
-                
-                logToPage(`Lookup failed for scan: ${data ? data.message : "Unknown error"}`, 'error');
-                return;
-            }
-            
-            const checkInData = data.data;
-            
-            // Then get attendee details from second API using JSONP
-            fetchAttendeeDetailsWithJSONP(code, function(attendeeData) {
-                if (!attendeeData || !attendeeData.success) {
-                    // If we can't get attendee details, still show check-in data with unknown name/email
-                    updateScanResultWithAttendeeData({
-                        ...checkInData,
-                        name: "Unknown",
-                        email: "Unknown",
-                        timestamp: "Unknown",
-                        code: code // Important to include code for eligibility check
+        // First get check-in/goodie bag status from first API
+        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    // Reset scan result fields if there was an error
+                    resetScanResultFields();
+                    
+                    // Show error for both statuses
+                    checkinStatus.classList.remove('hidden');
+                    checkinStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
+                    checkinStatusValue.className = "error-text";
+                    
+                    goodiebagStatus.classList.remove('hidden');
+                    goodiebagStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
+                    goodiebagStatusValue.className = "error-text";
+                    
+                    // Still try to process the scan
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after operation, even on partial failure
+                        unlockScanner();
                     });
                     
-                    // Now perform the actual scan operation (check-in or goodie bag)
-                    if (scanData) {
-                        sendToGoogleSheets(scanData, () => {
-                            unlockScanner();
-                        });
-                    } else {
-                        unlockScanner();
-                    }
-                    
-                    logToPage(`Retrieved partial data. Attendee details not available.`, 'warning');
+                    logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
                 }
                 
-                // Combine data from both APIs
-                const combinedData = {
-                    ...checkInData,
-                    name: attendeeData.data.name || "Unknown",
-                    email: attendeeData.data.email || "Unknown",
-                    timestamp: attendeeData.data.timestamp || "Unknown",
-                    code: code // Add code to combined data for eligibility check
-                };
+                const checkInData = data.data;
                 
-                // Display the combined data
-                updateScanResultWithAttendeeData(combinedData);
-                
-                // Now perform the actual scan operation (check-in or goodie bag)
-                // Only if scanData is not null (null means ineligible for goodie bag)
-                if (scanData) {
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after successful operation and response
-                        unlockScanner();
+                // Then get attendee details from second API
+                fetchAttendeeDetails(code)
+                    .then(attendeeDetails => {
+                        // Combine data from both APIs
+                        const combinedData = {
+                            ...checkInData,
+                            name: attendeeDetails.name,
+                            email: attendeeDetails.email,
+                            timestamp: attendeeDetails.timestamp, // Use timestamp from attendeeDetails
+                            code: code // Add code to combined data for eligibility check
+                        };
+                        
+                        // Display the combined data
+                        updateScanResultWithAttendeeData(combinedData);
+                        
+                        // Now perform the actual scan operation (check-in or goodie bag)
+                        // Only if scanData is not null (null means ineligible for goodie bag)
+                        if (scanData) {
+                            sendToGoogleSheets(scanData, () => {
+                                // Unlock scanner after successful operation and response
+                                unlockScanner();
+                            });
+                        } else {
+                            // Just unlock the scanner without sending data
+                            unlockScanner();
+                        }
+                        
+                        // Log success
+                        logToPage(`Retrieved attendee info for: ${code}`, 'success');
+                    })
+                    .catch(error => {
+                        // If we can't get attendee details, still show check-in data with unknown name/email
+                        updateScanResultWithAttendeeData({
+                            ...checkInData,
+                            name: "Unknown",
+                            email: "Unknown",
+                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
+                        });
+                        
+                        // Now perform the actual scan operation (check-in or goodie bag)
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation
+                            unlockScanner();
+                        });
+                        
+                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
-                } else {
-                    // Just unlock the scanner without sending data
-                    unlockScanner();
-                }
+            })
+            .catch(error => {
+                resetScanResultFields();
                 
-                // Log success
-                logToPage(`Retrieved attendee info for: ${code}`, 'success');
+                // Show connection error for both statuses
+                checkinStatus.classList.remove('hidden');
+                checkinStatusValue.textContent = "Error connecting to database";
+                checkinStatusValue.className = "error-text";
+                
+                goodiebagStatus.classList.remove('hidden');
+                goodiebagStatusValue.textContent = "Error connecting to database";
+                goodiebagStatusValue.className = "error-text";
+                
+                // Make sure to unlock scanner even on connection error
+                sendToGoogleSheets(scanData, () => {
+                    unlockScanner();
+                });
+                
+                logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
-        });
     }
-    
-    // New function to fetch data using JSONP approach (iframe-based)
-    function fetchAttendeeDataWithJSONP(code, callback) {
-        // Create a unique callback name
-        const callbackName = 'attendeeCallback_' + Math.floor(Math.random() * 1000000);
-        
-        // Create a listener for the message from the iframe
-        window[callbackName] = function(data) {
-            // Clean up
-            delete window[callbackName];
-            document.body.removeChild(iframe);
-            
-            // Call the callback with the data
-            callback(data);
-        };
-        
-        // Create an iframe to load the data
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.onload = function() {
-            // Add a timeout in case the script doesn't respond
-            setTimeout(function() {
-                if (window[callbackName]) {
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    callback(null); // Call with null to indicate failure
-                    logToPage('Data fetch timed out', 'error');
-                }
-            }, 10000); // 10 seconds timeout
-        };
-        
-        // Use a form POST to avoid URL length limitations
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.target = 'jsonp-iframe-' + callbackName;
-        form.action = scriptUrl + '?callback=' + callbackName + '&code=' + encodeURIComponent(code);
-        
-        // Add a field to indicate this is a JSONP request
-        const jsonpField = document.createElement('input');
-        jsonpField.type = 'hidden';
-        jsonpField.name = 'jsonp';
-        jsonpField.value = 'true';
-        form.appendChild(jsonpField);
-        
-        // Set the iframe name to match the form target
-        iframe.name = 'jsonp-iframe-' + callbackName;
-        iframe.id = 'jsonp-iframe-' + callbackName;
-        
-        // Append the iframe and form to the document
-        document.body.appendChild(iframe);
-        document.body.appendChild(form);
-        
-        // Submit the form
-        form.submit();
-        
-        // Remove the form after submission
-        document.body.removeChild(form);
-        
-        logToPage('Fetching attendee data using JSONP...', 'info');
-    }
-    
-    // Similar function for attendee details API
-    function fetchAttendeeDetailsWithJSONP(code, callback) {
-        // Create a unique callback name
-        const callbackName = 'detailsCallback_' + Math.floor(Math.random() * 1000000);
-        
-        // Create a listener for the message from the iframe
-        window[callbackName] = function(data) {
-            // Clean up
-            delete window[callbackName];
-            document.body.removeChild(iframe);
-            
-            // Call the callback with the data
-            callback(data);
-        };
-        
-        // Create an iframe to load the data
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.onload = function() {
-            // Add a timeout in case the script doesn't respond
-            setTimeout(function() {
-                if (window[callbackName]) {
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    callback(null); // Call with null to indicate failure
-                    logToPage('Attendee details fetch timed out', 'error');
-                }
-            }, 10000); // 10 seconds timeout
-        };
-        
-        // Use a form POST to avoid URL length limitations
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.target = 'jsonp-iframe-' + callbackName;
-        form.action = attendeeApiUrl + '?callback=' + callbackName + '&code=' + encodeURIComponent(code);
-        
-        // Add a field to indicate this is a JSONP request
-        const jsonpField = document.createElement('input');
-        jsonpField.type = 'hidden';
-        jsonpField.name = 'jsonp';
-        jsonpField.value = 'true';
-        form.appendChild(jsonpField);
-        
-        // Set the iframe name to match the form target
-        iframe.name = 'jsonp-iframe-' + callbackName;
-        iframe.id = 'jsonp-iframe-' + callbackName;
-        
-        // Append the iframe and form to the document
-        document.body.appendChild(iframe);
-        document.body.appendChild(form);
-        
-        // Submit the form
-        form.submit();
-        
-        // Remove the form after submission
-        document.body.removeChild(form);
-        
-        logToPage('Fetching attendee details using JSONP...', 'info');
-    }
-    
+
     function updateScanResultWithAttendeeData(data) {
         // Show name and email if available, otherwise show placeholder
         scanName.textContent = data.name || "-";

@@ -2,46 +2,15 @@
 // This file should be created in the Google Apps Script editor at:
 // https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec
 
-// Set CORS headers for web app
-function setCorsHeaders(resp) {
-  // Allow access specifically from your GitHub Pages site and localhost for testing
-  resp.setHeader('Access-Control-Allow-Origin', 'https://dgfixami.github.io');
-  resp.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  resp.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  return resp;
-}
-
-// Handle OPTIONS requests for CORS preflight
-function doOptions(e) {
-  var resp = ContentService.createTextOutput('');
-  resp = setCorsHeaders(resp);
-  return resp;
-}
-
 // Define the doGet function to handle GET requests from testing
 function doGet(e) {
-  var resp;
-  
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    resp = handleLookup(e.parameter.code);
-    
-    // Check if this is a JSONP request
-    if (e.parameter.callback) {
-      // Wrap the response in the JSONP callback
-      const jsonpResponse = ContentService.createTextOutput(
-        e.parameter.callback + '(' + resp.getContent() + ');'
-      ).setMimeType(ContentService.MimeType.JAVASCRIPT);
-      return setCorsHeaders(jsonpResponse);
-    }
-    
-    // Regular JSON response with CORS headers
-    return setCorsHeaders(resp);
+    return handleLookup(e.parameter.code);
   }
   
   // Default response for simple testing
-  resp = ContentService.createTextOutput("QR Code API is running");
-  return setCorsHeaders(resp);
+  return ContentService.createTextOutput("QR Code API is running");
 }
 
 // Update handleLookup function for new column structure
@@ -119,25 +88,7 @@ function handleLookup(code) {
 
 // Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
-  var resp;
-  
   try {
-    // Check if this is a JSONP request for lookup
-    if (e.parameter && e.parameter.jsonp && e.parameter.code) {
-      resp = handleLookup(e.parameter.code);
-      
-      // Check if a callback was provided
-      if (e.parameter.callback) {
-        // Wrap the response in the JSONP callback
-        const jsonpResponse = ContentService.createTextOutput(
-          e.parameter.callback + '(' + resp.getContent() + ');'
-        ).setMimeType(ContentService.MimeType.JAVASCRIPT);
-        return setCorsHeaders(jsonpResponse);
-      }
-      
-      return setCorsHeaders(resp);
-    }
-    
     // Parse the incoming data
     const data = JSON.parse(e.postData.contents);
     
@@ -229,10 +180,8 @@ function doPost(e) {
     
   } catch (error) {
     Logger.log("Error: " + error.toString());
-    resp = createResponse(false, "Error processing request: " + error.toString());
+    return createResponse(false, "Error processing request: " + error.toString());
   }
-  
-  return setCorsHeaders(resp);
 }
 
 // Helper function to log scans in a separate sheet for historical records
