@@ -5,9 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="app-container" style="display: none;">
+        <div class="user-info">
+            <span id="user-email"></span>
+            <button id="logout-button">Logout</button>
+        </div>
+        
         <h1>QR Code Scanner</h1>
         
         <div class="toggle-container">
@@ -57,7 +63,35 @@
         </div>
     </div>
     
+    <div id="login-container" class="login-container">
+        <div class="login-box">
+            <h1>QR Scanner Login</h1>
+            <p>Please sign in with your HBL Online (Fixami) account to continue.</p>
+            <div id="g_id_onload"
+                 data-client_id="681607833593-08kg1qc54mq4vn9vghd5rktuktovv5uu.apps.googleusercontent.com"
+                 data-context="signin"
+                 data-ux_mode="popup"
+                 data-callback="handleCredentialResponse"
+                 data-auto_prompt="false">
+            </div>
+            
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="rectangular"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="large"
+                 data-logo_alignment="left">
+            </div>
+            
+            <div id="login-error" class="login-error" style="display: none;">
+                Only @fixami.com email addresses are allowed to access this application.
+            </div>
+        </div>
+    </div>
+    
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="auth.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

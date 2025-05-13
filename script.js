@@ -1,4 +1,9 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize the scanner if the user is authenticated
+    if (!sessionStorage.getItem('qrScannerAuthToken')) {
+        return; // Exit early if not authenticated
+    }
+    
     const modeToggle = document.getElementById('mode-toggle');
     const modeValue = document.getElementById('mode-value');
     const codeValue = document.getElementById('code-value');
@@ -38,6 +43,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Google Apps Script web app URLs - one for check-in/goodie bag, one for attendee details
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
     const attendeeApiUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
+    
+    // Add user's email to log messages for auditing
+    const userData = JSON.parse(sessionStorage.getItem('qrScannerUserData') || '{}');
+    const userEmail = userData.email || 'Unknown User';
+    
+    // Log the authenticated user
+    logToPage(`Authenticated as: ${userEmail}`, 'info');
     
     // Setup lookup button click handler
     if(lookupButton) {
