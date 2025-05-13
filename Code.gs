@@ -4,18 +4,34 @@
 
 // Define the doGet function to handle GET requests from testing
 function doGet(e) {
-  // Handle OPTIONS request for CORS preflight
-  if (e.method === 'OPTIONS') {
-    return handleOptions();
-  }
+  // For JSONP support
+  const callback = e.parameter.callback;
   
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    return addCorsHeaders(handleLookup(e.parameter.code));
+    const responseData = handleLookup(e.parameter.code);
+    
+    // If JSONP was requested
+    if (callback) {
+      return ContentService.createTextOutput(callback + '(' + JSON.stringify(responseData.getContent()) + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    
+    // Otherwise add CORS headers
+    return addCorsHeaders(responseData);
   }
   
   // Default response for simple testing
-  return addCorsHeaders(ContentService.createTextOutput("QR Code API is running"));
+  const output = ContentService.createTextOutput("QR Code API is running");
+  
+  // If JSONP was requested
+  if (callback) {
+    return ContentService.createTextOutput(callback + '("QR Code API is running")')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  
+  // Otherwise add CORS headers
+  return addCorsHeaders(output);
 }
 
 // Update handleLookup function for new column structure
@@ -93,18 +109,12 @@ function handleLookup(code) {
 
 // Define the doPost function to handle POST requests with new column structure
 function doPost(e) {
-  // Handle OPTIONS request for CORS preflight
+  // Handle OPTIONS requests for CORS preflight
   if (e.method === 'OPTIONS') {
     return handleOptions();
   }
   
   try {
-    // Handle CORS preflight requests
-    if (e.postData === undefined) {
-      return addCorsHeaders(ContentService.createTextOutput('{"success":false,"message":"No data received"}')
-        .setMimeType(ContentService.MimeType.JSON));
-    }
-    
     // Parse the incoming data
     const data = JSON.parse(e.postData.contents);
     
@@ -242,25 +252,15 @@ function createResponse(success, message, data = null) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Add CORS headers handler functions
+// Enhanced CORS headers to allow requests from dgfixami.github.io
 function addCorsHeaders(output) {
-  // If output is already a TextOutput object
-  if (output.getContentType && output.getContentType() === ContentService.MimeType.JSON) {
-    return output
-      .setHeader('Access-Control-Allow-Origin', '*')
-      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-      .setHeader('Access-Control-Max-Age', '3600');
-  }
-  
-  // If output is not a TextOutput object, convert it
-  const text = (typeof output === 'object') ? JSON.stringify(output) : String(output);
-  return ContentService.createTextOutput(text)
-    .setMimeType(ContentService.MimeType.JSON)
+  return output
     .setHeader('Access-Control-Allow-Origin', '*')
     .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    .setHeader('Access-Control-Max-Age', '3600');
+    .setHeader('Access-Control-Max-Age', '3600')
+    // Important: Set Cache-Control to prevent caching that can interfere with CORS
+    .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 }
 
 function handleOptions() {
@@ -269,5 +269,6 @@ function handleOptions() {
     .setHeader('Access-Control-Allow-Origin', '*')
     .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     .setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    .setHeader('Access-Control-Max-Age', '3600');
+    .setHeader('Access-Control-Max-Age', '3600')
+    .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 }

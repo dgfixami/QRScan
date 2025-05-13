@@ -92,6 +92,9 @@
         </div>
     </div>
     
+    <!-- Add hidden iframe for form submissions to avoid CORS issues with POST -->
+    <iframe id="hidden-frame" name="hidden-frame" style="display:none;"></iframe>
+    
     <!-- Load authentication script first -->
     <script src="auth.js"></script>
     

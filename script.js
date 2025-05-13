@@ -293,32 +293,29 @@ function initializeQrScanner(userProfile) {
         lookupResult.innerHTML = '<div class="loading">Loading...</div>';
         lookupResult.classList.remove('hidden');
         
-        // Use fetch with CORS mode explicitly set
-        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`, {
-            method: 'GET',
-            mode: 'cors', // Explicitly request CORS
-            headers: {
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data.success) {
-                showLookupError(data.message || 'Failed to find check-in status');
-                logToPage(`Lookup failed: ${data.message}`, 'error');
-                return null;
-            }
-            
-            const checkInData = data.data;
-            
-            // Then get attendee details from second API with explicit CORS mode
-            return fetchAttendeeDetails(code)
-                .then(attendeeDetails => {
+        // Generate a unique callback name for JSONP
+        const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
+        
+        // Create a script element for JSONP
+        const script = document.createElement('script');
+        script.src = `${scriptUrl}?code=${encodeURIComponent(code)}&callback=${callbackName}`;
+        
+        // Setup global callback function
+        window[callbackName] = function(data) {
+            try {
+                // Parse the response if it's a string
+                const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+                
+                if (!parsedData.success) {
+                    showLookupError(parsedData.message || 'Failed to find check-in status');
+                    logToPage(`Lookup failed: ${parsedData.message}`, 'error');
+                    return null;
+                }
+                
+                const checkInData = parsedData.data;
+                
+                // Then get attendee details from second API using JSONP
+                fetchAttendeeDetailsJsonp(code, function(attendeeDetails) {
                     // Combine data from both APIs
                     const combinedData = {
                         ...checkInData,
@@ -330,71 +327,102 @@ function initializeQrScanner(userProfile) {
                     // Display the combined data
                     displayAttendeeData(combinedData);
                     logToPage(`Successfully retrieved data for code: ${code}`, 'success');
-                })
-                .catch(error => {
-                    // If we can't get attendee details, still show check-in data
+                }, function(error) {
+                    // Error handler for attendee details
                     displayAttendeeData({
                         ...checkInData,
                         name: "Unknown",
                         email: "Unknown",
                         timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                     });
-                    logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
+                    logToPage(`Retrieved partial data. Attendee details error: ${error}`, 'warning');
                 });
-        })
-        .catch(error => {
+            } catch (error) {
+                showLookupError('Error processing response');
+                logToPage(`Lookup error: ${error.message}`, 'error');
+            } finally {
+                // Clean up - remove script tag and delete global callback
+                document.body.removeChild(script);
+                delete window[callbackName];
+            }
+        };
+        
+        // Handle script load errors
+        script.onerror = function() {
             showLookupError('Error connecting to database');
-            logToPage(`Lookup error: ${error.message}`, 'error');
-        });
+            logToPage(`Lookup error: Failed to connect to Google Scripts API`, 'error');
+            document.body.removeChild(script);
+            delete window[callbackName];
+        };
+        
+        // Add the script to the page to start the request
+        document.body.appendChild(script);
     }
     
-    // New function to fetch attendee details from the second API
-    function fetchAttendeeDetails(code) {
+    // New function to fetch attendee details using JSONP
+    function fetchAttendeeDetailsJsonp(code, successCallback, errorCallback) {
         logToPage(`Fetching attendee details for code: ${code}`, 'info');
         
-        return fetch(`${attendeeApiUrl}?code=${encodeURIComponent(code)}`, {
-            method: 'GET',
-            mode: 'cors', // Explicitly request CORS
-            headers: {
-                'Accept': 'application/json'
+        // Generate a unique callback name for JSONP
+        const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
+        
+        // Create a script element for JSONP
+        const script = document.createElement('script');
+        script.src = `${attendeeApiUrl}?code=${encodeURIComponent(code)}&callback=${callbackName}`;
+        
+        // Setup global callback function
+        window[callbackName] = function(data) {
+            try {
+                // Parse the response if it's a string
+                const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+                
+                if (!parsedData.success) {
+                    throw new Error(parsedData.message || "Failed to retrieve attendee details");
+                }
+                
+                // Log the actual response for debugging
+                console.log("Attendee API response:", parsedData);
+                
+                // Format name from firstname and lastname fields
+                const firstname = parsedData.data.firstname || "";
+                const lastname = parsedData.data.lastname || "";
+                const fullName = [firstname, lastname].filter(Boolean).join(' ');
+                
+                // Get the timestamp
+                const timestamp = parsedData.data.timestamp || "";
+                
+                // Log the extracted details
+                logToPage(`Found attendee: ${fullName}`, 'info');
+                
+                const attendeeData = {
+                    name: fullName,
+                    email: parsedData.data.email || "",
+                    code: code,
+                    timestamp: timestamp
+                };
+                
+                // Call the success callback with the data
+                successCallback(attendeeData);
+            } catch (error) {
+                logToPage(`Error fetching attendee details: ${error.message}`, 'error');
+                errorCallback(error.message);
+            } finally {
+                // Clean up - remove script tag and delete global callback
+                document.body.removeChild(script);
+                delete window[callbackName];
             }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data.success) {
-                throw new Error(data.message || "Failed to retrieve attendee details");
-            }
-            
-            // Log the actual response for debugging
-            console.log("Attendee API response:", data);
-            
-            // Format name from firstname and lastname fields
-            const firstname = data.data.firstname || "";
-            const lastname = data.data.lastname || "";
-            const fullName = [firstname, lastname].filter(Boolean).join(' ');
-            
-            // Get the timestamp from column A
-            const timestamp = data.data.timestamp || "";
-            
-            // Log the extracted details
-            logToPage(`Found attendee: ${fullName}`, 'info');
-            
-            return {
-                name: fullName,
-                email: data.data.email || "",
-                code: code,
-                timestamp: timestamp // Include the timestamp from column A
-            };
-        })
-        .catch(error => {
-            logToPage(`Error fetching attendee details: ${error.message}`, 'error');
-            throw error; // Re-throw to be handled by the caller
-        });
+        };
+        
+        // Handle script load errors
+        script.onerror = function() {
+            logToPage(`Error connecting to attendee API`, 'error');
+            errorCallback("Failed to connect to attendee API");
+            document.body.removeChild(script);
+            delete window[callbackName];
+        };
+        
+        // Add the script to the page to start the request
+        document.body.appendChild(script);
     }
     
     // Add a function to check if a code is eligible for a goodie bag
@@ -545,342 +573,56 @@ function initializeQrScanner(userProfile) {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
         
-        // Use fetch with proper headers instead of form submission
-        fetch(scriptUrl, {
-            method: 'POST',
-            mode: 'cors', // Explicitly request CORS
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(scanData)
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
-            } else {
-                logToPage(`Error from Google Sheets: ${data.message}`, 'error');
-                alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
-            }
-            
-            // Execute callback
-            if (typeof callback === 'function') {
-                callback();
-            } else {
-                unlockScanner();
-            }
-        })
-        .catch(error => {
-            logToPage(`Error sending data: ${error.message}`, 'error');
-            
-            // Still execute callback on error to ensure UI doesn't get stuck
-            if (typeof callback === 'function') {
-                callback();
-            } else {
-                unlockScanner();
-            }
-        });
-    }
-    
-    // Show lookup error
-    function showLookupError(message) {
-        lookupResult.innerHTML = `
-            <div class="lookup-error">
-                <p>⚠️ ${message}</p>
-            </div>
-        `;
-        lookupResult.classList.remove('hidden');
-    }
-    
-    // Function to log messages to the page
-    function logToPage(message, type = 'info') {
-        if (message === undefined) {
-            message = "Unknown error occurred (undefined message)";
-            type = 'warning';
-        } else if (message === '') {
-            message = "Empty message received";
-            type = 'warning';
+        // Use form-based POST to avoid CORS issues with POST requests
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = scriptUrl;
+        form.target = 'hidden-frame';
+        form.style.display = 'none';
+        
+        // Add data as hidden field
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'data';
+        input.value = JSON.stringify(scanData);
+        form.appendChild(input);
+        
+        // Create hidden iframe for response
+        let iframe = document.getElementById('hidden-frame');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.name = 'hidden-frame';
+            iframe.id = 'hidden-frame';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
         }
         
-        const logEntry = document.createElement('div');
-        logEntry.className = `log-entry ${type}`;
+        // Set a timeout to ensure we don't wait forever
+        const timeoutId = setTimeout(() => {
+            logToPage('Operation timed out, but continuing...', 'warning');
+            if (callback) callback();
+            else unlockScanner();
+        }, 5000);
         
-        const timestamp = new Date().toLocaleTimeString();
-        logEntry.textContent = `${timestamp}: ${message}`;
+        // Handle iframe load event
+        iframe.onload = function() {
+            clearTimeout(timeoutId);
+            logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
+            if (callback) callback();
+            else unlockScanner();
+        };
         
-        logMessages.prepend(logEntry);
-        console.log(`[${type.toUpperCase()}] ${message}`);
+        // Add form to document and submit
+        document.body.appendChild(form);
+        form.submit();
+        
+        // Remove form after submission
+        setTimeout(() => {
+            document.body.removeChild(form);
+        }, 100);
     }
     
-    modeToggle.addEventListener('change', function() {
-        currentMode = this.checked ? 'Goodie Bag' : 'Check-in';
-        modeValue.textContent = currentMode;
-        logToPage(`Mode switched to: ${currentMode}`);
-        
-        // Reset scan result fields when mode is toggled
-        resetScanResultFields();
-        
-        // Also reset the code value to make it clear it's ready for a new scan
-        codeValue.textContent = "-";
-        codeValue.style.color = "";
-    });
-    
-    setTimeout(() => {
-        initializeCameras();
-    }, 500);
-    
-    async function initializeCameras() {
-        try {
-            logToPage('Getting available cameras...');
-            
-            Html5Qrcode.getCameras().then(devices => {
-                cameras = devices;
-                logToPage(`Found ${devices.length} camera(s)`);
-                console.log("Available cameras:", devices);
-                
-                if (devices && devices.length > 0) {
-                    const backCamera = devices.find(camera => 
-                        /(back|rear|environment)/i.test(camera.label));
-                    
-                    if (backCamera) {
-                        currentCameraIndex = devices.indexOf(backCamera);
-                        logToPage('Back camera found, using it by default');
-                    }
-                    
-                    if (devices[currentCameraIndex] && 
-                        typeof devices[currentCameraIndex].id === 'string' && 
-                        devices[currentCameraIndex].id.length > 0) {
-                        
-                        startScanner(devices[currentCameraIndex].id);
-                    } else {
-                        logToPage('Using environment facing camera as fallback');
-                        startFallbackScanner();
-                    }
-                    
-                    if (devices.length > 1 && !document.getElementById('switch-camera')) {
-                        addCameraSwitchButton();
-                    }
-                } else {
-                    logToPage('No cameras detected, trying alternative method', 'warning');
-                    startFallbackScanner();
-                }
-            }).catch(err => {
-                logToPage(`Error getting cameras: ${err.message}`, 'error');
-                startFallbackScanner();
-            });
-        } catch (error) {
-            logToPage(`Camera initialization error: ${error.message}`, 'error');
-            startFallbackScanner();
-        }
-    }
-    
-    function addCameraSwitchButton() {
-        const switchBtn = document.createElement('button');
-        switchBtn.id = 'switch-camera';
-        switchBtn.className = 'retry-button';
-        switchBtn.textContent = 'Switch Camera';
-        switchBtn.addEventListener('click', () => {
-            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-            logToPage(`Switching to camera: ${cameras[currentCameraIndex].label || `Camera ${currentCameraIndex + 1}`}`);
-            startScanner(cameras[currentCameraIndex].id);
-        });
-        
-        reader.parentNode.insertBefore(switchBtn, reader.nextSibling);
-    }
-    
-    function startScanner(cameraId) {
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.stop().then(() => {
-                initScanner(cameraId);
-            }).catch(err => {
-                logToPage(`Error stopping current scanner: ${err.message}`, 'error');
-                html5QrCode = null;
-                initScanner(cameraId);
-            });
-        } else {
-            initScanner(cameraId);
-        }
-    }
-    
-    function initScanner(cameraId) {
-        try {
-            logToPage(`Initializing scanner with camera ID: ${cameraId}`);
-            
-            html5QrCode = new Html5Qrcode("reader");
-            // Store in global reference for proper cleanup
-            globalHtml5QrCode = html5QrCode;
-            
-            const config = {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0
-            };
-            
-            html5QrCode.start(
-                cameraId, 
-                config,
-                qrCodeSuccessCallback,
-                qrCodeErrorCallback
-            ).then(() => {
-                logToPage('Camera started successfully', 'success');
-                cameraInitAttempts = 0;
-                
-                let flash = document.querySelector('.camera-flash');
-                if (!flash) {
-                    flash = document.createElement('div');
-                    flash.className = 'camera-flash';
-                    reader.appendChild(flash);
-                }
-                
-                const existingRetryBtn = document.getElementById('retry-camera-btn');
-                if (existingRetryBtn) {
-                    existingRetryBtn.remove();
-                }
-                
-            }).catch(err => {
-                logToPage(`Failed to start camera: ${err.message}`, 'error');
-                
-                if (cameraInitAttempts < MAX_INIT_ATTEMPTS) {
-                    cameraInitAttempts++;
-                    logToPage('Trying alternative camera method...', 'info');
-                    startFallbackScanner();
-                } else {
-                    showError(`Camera start failed after ${MAX_INIT_ATTEMPTS} attempts`);
-                    addRetryButton();
-                }
-            });
-        } catch (error) {
-            logToPage(`Scanner initialization error: ${error.message}`, 'error');
-            addRetryButton();
-        }
-    }
-    
-    function startFallbackScanner() {
-        try {
-            logToPage('Using fallback camera method');
-            
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().catch(err => 
-                    logToPage(`Error stopping previous scanner: ${err.message}`, 'warning')
-                );
-            }
-            
-            html5QrCode = new Html5Qrcode("reader");
-            // Store in global reference for proper cleanup
-            globalHtml5QrCode = html5QrCode;
-            
-            html5QrCode.start(
-                { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0
-                },
-                qrCodeSuccessCallback,
-                qrCodeErrorCallback
-            ).then(() => {
-                logToPage('Fallback camera method succeeded', 'success');
-                cameraInitAttempts = 0;
-                
-                let flash = document.querySelector('.camera-flash');
-                if (!flash) {
-                    flash = document.createElement('div');
-                    flash.className = 'camera-flash';
-                    reader.appendChild(flash);
-                }
-                
-            }).catch(err => {
-                logToPage(`Fallback camera method failed: ${err.message}`, 'error');
-                showError("Could not access camera. Please ensure camera permissions are granted.");
-                addRetryButton();
-            });
-        } catch (error) {
-            logToPage(`Fallback scanner error: ${error.message}`, 'error');
-            showError("Camera initialization failed completely. Please try refreshing the page.");
-            addRetryButton();
-        }
-    }
-    
-    function addRetryButton() {
-        const existingRetryBtn = document.getElementById('retry-camera-btn');
-        if (existingRetryBtn) {
-            existingRetryBtn.remove();
-        }
-        
-        const retryBtn = document.createElement('button');
-        retryBtn.id = 'retry-camera-btn';
-        retryBtn.className = 'retry-button';
-        retryBtn.textContent = 'Retry Camera';
-        retryBtn.addEventListener('click', () => {
-            logToPage('Manual camera retry requested', 'info');
-            cameraInitAttempts = 0;
-            initializeCameras();
-        });
-        
-        reader.parentNode.insertBefore(retryBtn, reader);
-    }
-    
-    function qrCodeSuccessCallback(decodedText) {
-        // If scanner is locked, silently ignore this scan (no logging)
-        if (isScanning) {
-            return; // Silent return without logging
-        }
-        
-        try {
-            // Lock the scanner immediately
-            lockScanner();
-            
-            // Add safety timeout to ensure unlock happens no matter what
-            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
-            
-            const flash = document.querySelector('.camera-flash');
-            if (flash) {
-                flash.classList.add('flash-animation');
-                setTimeout(() => flash.classList.remove('flash-animation'), 500);
-            }
-            
-            // Update the UI
-            codeValue.textContent = decodedText;
-            codeValue.style.color = "";
-            
-            // Check eligibility for goodie bag mode first
-            if (currentMode === 'Goodie Bag' && !isGoodieBagEligible(decodedText)) {
-                logToPage(`Cannot process goodie bag - code ${decodedText} is not eligible (missing GB code)`, 'error');
-                
-                // We still want to fetch the attendee data to show the user details
-                // But we won't mark it as received in the system
-                fetchAttendeeDataForScan(decodedText, null); // Pass null for scanData to skip marking
-                
-                return;
-            }
-            
-            // Prepare data for Google Sheets integration
-            const scanData = {
-                code: decodedText,
-                mode: currentMode,
-                timestamp: new Date().toISOString()
-            };
-            
-            // Log locally first
-            logToPage(`Successfully scanned: ${decodedText} (${currentMode})`, 'success');
-            
-            // Fetch attendee data once and use it for both display areas
-            fetchAttendeeDataForScan(decodedText, scanData);
-            
-        } catch (error) {
-            logToPage(`Error processing scan: ${error.message}`, 'error');
-            resetScanResultFields();
-            // Make sure to unlock the scanner on error
-            unlockScanner();
-        }
-    }
-    
+    // Modified function to fetch attendee data for scan result
     function fetchAttendeeDataForScan(code, scanData) {
         // Show loading state
         scanName.textContent = "Loading...";
@@ -891,104 +633,158 @@ function initializeQrScanner(userProfile) {
         checkinStatus.classList.add('hidden');
         goodiebagStatus.classList.add('hidden');
         
-        // First get check-in/goodie bag status from first API
-        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
+        // Generate a unique callback name for JSONP
+        const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
+        
+        // Create a script element for JSONP
+        const script = document.createElement('script');
+        script.src = `${scriptUrl}?code=${encodeURIComponent(code)}&callback=${callbackName}`;
+        
+        // Setup global callback function
+        window[callbackName] = function(data) {
+            try {
+                // Parse the response if it's a string
+                const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+                
+                if (!parsedData.success) {
                     // Reset scan result fields if there was an error
                     resetScanResultFields();
                     
                     // Show error for both statuses
                     checkinStatus.classList.remove('hidden');
-                    checkinStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
+                    checkinStatusValue.textContent = "Error: " + (parsedData.message || "Attendee not found");
                     checkinStatusValue.className = "error-text";
                     
                     goodiebagStatus.classList.remove('hidden');
-                    goodiebagStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
+                    goodiebagStatusValue.textContent = "Error: " + (parsedData.message || "Attendee not found");
                     goodiebagStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after operation, even on partial failure
+                    if (scanData) {
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation, even on partial failure
+                            unlockScanner();
+                        });
+                    } else {
                         unlockScanner();
-                    });
+                    }
                     
-                    logToPage(`Lookup failed for scan: ${data.message}`, 'error');
+                    logToPage(`Lookup failed for scan: ${parsedData.message}`, 'error');
                     return;
                 }
                 
-                const checkInData = data.data;
+                const checkInData = parsedData.data;
                 
-                // Then get attendee details from second API
-                fetchAttendeeDetails(code)
-                    .then(attendeeDetails => {
-                        // Combine data from both APIs
-                        const combinedData = {
-                            ...checkInData,
-                            name: attendeeDetails.name,
-                            email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp, // Use timestamp from attendeeDetails
-                            code: code // Add code to combined data for eligibility check
-                        };
-                        
-                        // Display the combined data
-                        updateScanResultWithAttendeeData(combinedData);
-                        
-                        // Now perform the actual scan operation (check-in or goodie bag)
-                        // Only if scanData is not null (null means ineligible for goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after successful operation and response
-                                unlockScanner();
-                            });
-                        } else {
-                            // Just unlock the scanner without sending data
+                // Then get attendee details from second API using JSONP
+                fetchAttendeeDetailsJsonp(code, function(attendeeDetails) {
+                    // Combine data from both APIs
+                    const combinedData = {
+                        ...checkInData,
+                        name: attendeeDetails.name,
+                        email: attendeeDetails.email,
+                        timestamp: attendeeDetails.timestamp,
+                        code: code // Add code to combined data for eligibility check
+                    };
+                    
+                    // Display the combined data
+                    updateScanResultWithAttendeeData(combinedData);
+                    
+                    // Now perform the actual scan operation (check-in or goodie bag)
+                    // Only if scanData is not null (null means ineligible for goodie bag)
+                    if (scanData) {
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after successful operation and response
                             unlockScanner();
-                        }
-                        
-                        // Log success
-                        logToPage(`Retrieved attendee info for: ${code}`, 'success');
-                    })
-                    .catch(error => {
-                        // If we can't get attendee details, still show check-in data with unknown name/email
-                        updateScanResultWithAttendeeData({
-                            ...checkInData,
-                            name: "Unknown",
-                            email: "Unknown",
-                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                         });
-                        
-                        // Now perform the actual scan operation (check-in or goodie bag)
+                    } else {
+                        // Just unlock the scanner without sending data
+                        unlockScanner();
+                    }
+                    
+                    // Log success
+                    logToPage(`Retrieved attendee info for: ${code}`, 'success');
+                }, function(error) {
+                    // If we can't get attendee details, still show check-in data with unknown name/email
+                    updateScanResultWithAttendeeData({
+                        ...checkInData,
+                        name: "Unknown",
+                        email: "Unknown",
+                        timestamp: "Unknown",
+                        code: code
+                    });
+                    
+                    // Now perform the actual scan operation (check-in or goodie bag)
+                    if (scanData) {
                         sendToGoogleSheets(scanData, () => {
                             // Unlock scanner after operation
                             unlockScanner();
                         });
-                        
-                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
-                    });
-            })
-            .catch(error => {
+                    } else {
+                        unlockScanner();
+                    }
+                    
+                    logToPage(`Retrieved partial data. Attendee details error: ${error}`, 'warning');
+                });
+            } catch (error) {
                 resetScanResultFields();
                 
                 // Show connection error for both statuses
                 checkinStatus.classList.remove('hidden');
-                checkinStatusValue.textContent = "Error connecting to database";
+                checkinStatusValue.textContent = "Error processing response";
                 checkinStatusValue.className = "error-text";
                 
                 goodiebagStatus.classList.remove('hidden');
-                goodiebagStatusValue.textContent = "Error connecting to database";
+                goodiebagStatusValue.textContent = "Error processing response";
                 goodiebagStatusValue.className = "error-text";
                 
-                // Make sure to unlock scanner even on connection error
+                // Make sure to unlock scanner even on error
+                if (scanData) {
+                    sendToGoogleSheets(scanData, () => {
+                        unlockScanner();
+                    });
+                } else {
+                    unlockScanner();
+                }
+                
+                logToPage(`Error processing data: ${error.message}`, 'error');
+            } finally {
+                // Clean up - remove script tag and delete global callback
+                document.body.removeChild(script);
+                delete window[callbackName];
+            }
+        };
+        
+        // Handle script load errors
+        script.onerror = function() {
+            resetScanResultFields();
+            
+            // Show connection error for both statuses
+            checkinStatus.classList.remove('hidden');
+            checkinStatusValue.textContent = "Error connecting to database";
+            checkinStatusValue.className = "error-text";
+            
+            goodiebagStatus.classList.remove('hidden');
+            goodiebagStatusValue.textContent = "Error connecting to database";
+            goodiebagStatusValue.className = "error-text";
+            
+            // Make sure to unlock scanner even on connection error
+            if (scanData) {
                 sendToGoogleSheets(scanData, () => {
                     unlockScanner();
                 });
-                
-                logToPage(`Error fetching attendee data: ${error.message}`, 'error');
-            });
+            } else {
+                unlockScanner();
+            }
+            
+            logToPage(`Error fetching attendee data: Failed to connect to API`, 'error');
+            document.body.removeChild(script);
+            delete window[callbackName];
+        };
+        
+        // Add the script to the page to start the request
+        document.body.appendChild(script);
     }
-
+    
     function updateScanResultWithAttendeeData(data) {
         // Show name and email if available, otherwise show placeholder
         scanName.textContent = data.name || "-";
