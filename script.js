@@ -1,17 +1,4 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Avoid running the app initialization if not authenticated
-    if (!isAuthenticated()) {
-        console.log("User not authenticated");
-        return;
-    }
-    
-    // Log the authenticated user
-    const user = getCurrentUser();
-    if (user) {
-        logToPage(`Authenticated as: ${user.name} (${user.email})`, 'info');
-        console.log("Authenticated user:", user);
-    }
-    
     const modeToggle = document.getElementById('mode-toggle');
     const modeValue = document.getElementById('mode-value');
     const codeValue = document.getElementById('code-value');
@@ -520,13 +507,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to log messages to the page
     function logToPage(message, type = 'info') {
-        // Check if logMessages exists (may not if not authenticated)
-        const logMessages = document.getElementById('log-messages');
-        if (!logMessages) {
-            console.log(`[${type.toUpperCase()}] ${message}`);
-            return;
-        }
-        
         if (message === undefined) {
             message = "Unknown error occurred (undefined message)";
             type = 'warning';
