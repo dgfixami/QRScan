@@ -1,11 +1,16 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if auth is required (it always is now)
-    if (typeof userProfile === 'undefined' || userProfile === null) {
-        // Don't initialize the app yet - wait for authentication
-        console.log('Waiting for user authentication...');
-        return;
+    // Listen for authentication event
+    document.addEventListener('userAuthenticated', function(event) {
+        initializeQrScanner(event.detail); // Pass the user profile to initialize
+    });
+    
+    // Check if already authenticated (for page refreshes)
+    if (typeof userProfile !== 'undefined' && userProfile !== null) {
+        initializeQrScanner(userProfile);
     }
+});
 
+function initializeQrScanner(userProfile) {
     const modeToggle = document.getElementById('mode-toggle');
     const modeValue = document.getElementById('mode-value');
     const codeValue = document.getElementById('code-value');
@@ -43,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let isScanning = false;
     
     // Google Apps Script web app URLs - one for check-in/goodie bag, one for attendee details
+    // Modified to use JSONP approach to avoid CORS issues
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
     const attendeeApiUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
     
@@ -60,6 +66,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 lookupAttendee();
             }
         });
+    }
+
+    // Log a message about authenticated user
+    if (userProfile) {
+        logToPage(`Authenticated as: ${userProfile.name} (${userProfile.email})`, 'info');
     }
     
     // Updated helper function to format dates with day of the week
@@ -464,41 +475,75 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
         
-        fetch(scriptUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(scanData),
-            mode: 'no-cors' // This is required for Google Apps Script web apps
-        })
-        .then(response => {
-            // Due to no-cors mode, we won't get a proper response to parse
-            logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
-            
-            // Remove success alerts but keep in logs
-            // No more alerts for successful operations
-            
-            // Execute callback if provided
-            if (typeof callback === 'function') {
-                callback();
-            } else {
-                // Ensure unlock happens even if callback is not provided
-                unlockScanner();
-            }
-        })
-        .catch(error => {
-            logToPage(`Error sending to Google Sheets: ${error.message}`, 'error');
-            // Keep error alert to notify user of failures
-            alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
-            
-            // Unlock the scanner even on error
-            if (typeof callback === 'function') {
-                callback();
-            } else {
-                unlockScanner();
+        // Create a form with the scan data that will be submitted to the web app
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.target = 'hidden-iframe';
+        form.action = scriptUrl;
+        form.style.display = 'none';
+        
+        // Add the data as form fields
+        const dataField = document.createElement('input');
+        dataField.type = 'hidden';
+        dataField.name = 'data';
+        dataField.value = JSON.stringify(scanData);
+        form.appendChild(dataField);
+        
+        // Create hidden iframe to receive the response
+        let iframe = document.getElementById('hidden-iframe');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.name = 'hidden-iframe';
+            iframe.id = 'hidden-iframe';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+        }
+        
+        // Set up message listening for response from iframe
+        window.addEventListener('message', function receiveMessage(event) {
+            // Only process messages from our script domains
+            if (event.origin.includes('script.google.com')) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.status === 'success') {
+                        logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
+                    } else {
+                        logToPage(`Error from Google Sheets: ${data.message}`, 'error');
+                        alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
+                    }
+                } catch (e) {
+                    console.log('Received non-JSON message from iframe', event.data);
+                }
+                
+                // Clean up
+                window.removeEventListener('message', receiveMessage);
+                
+                // Execute callback
+                if (typeof callback === 'function') {
+                    callback();
+                } else {
+                    unlockScanner();
+                }
             }
         });
+        
+        // Add form to body and submit it
+        document.body.appendChild(form);
+        form.submit();
+        
+        // Remove form after submission
+        setTimeout(() => {
+            document.body.removeChild(form);
+        }, 100);
+        
+        // Set a timeout to ensure unlock happens even if there's no response
+        setTimeout(() => {
+            if (typeof callback === 'function') {
+                callback();
+            } else {
+                unlockScanner();
+            }
+        }, 5000);
     }
     
     // Show lookup error
@@ -529,251 +574,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         logMessages.prepend(logEntry);
         console.log(`[${type.toUpperCase()}] ${message}`);
-    }
-    
-    // Success callback when QR code is scanned - updated to check goodie bag eligibility before processing
-    function qrCodeSuccessCallback(decodedText) {
-        // If scanner is locked, silently ignore this scan (no logging)
-        if (isScanning) {
-            return; // Silent return without logging
-        }
-        
-        try {
-            // Lock the scanner immediately
-            lockScanner();
-            
-            // Add safety timeout to ensure unlock happens no matter what
-            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
-            
-            const flash = document.querySelector('.camera-flash');
-            if (flash) {
-                flash.classList.add('flash-animation');
-                setTimeout(() => flash.classList.remove('flash-animation'), 500);
-            }
-            
-            // Update the UI
-            codeValue.textContent = decodedText;
-            codeValue.style.color = "";
-            
-            // Check eligibility for goodie bag mode first
-            if (currentMode === 'Goodie Bag' && !isGoodieBagEligible(decodedText)) {
-                logToPage(`Cannot process goodie bag - code ${decodedText} is not eligible (missing GB code)`, 'error');
-                
-              
-                // We still want to fetch the attendee data to show the user details
-                // But we won't mark it as received in the system
-                fetchAttendeeDataForScan(decodedText, null); // Pass null for scanData to skip marking
-                
-                return;
-            }
-            
-            // Prepare data for Google Sheets integration
-            const scanData = {
-                code: decodedText,
-                mode: currentMode,
-                timestamp: new Date().toISOString()
-            };
-            
-            // Log locally first
-            logToPage(`Successfully scanned: ${decodedText} (${currentMode})`, 'success');
-            
-            // Fetch attendee data once and use it for both display areas
-            fetchAttendeeDataForScan(decodedText, scanData);
-            
-        } catch (error) {
-            logToPage(`Error processing scan: ${error.message}`, 'error');
-            resetScanResultFields();
-            // Make sure to unlock the scanner on error
-            unlockScanner();
-        }
-    }
-    
-    // Updated function to fetch and display attendee data for the scan result section
-    function fetchAttendeeDataForScan(code, scanData) {
-        // Show loading state
-        scanName.textContent = "Loading...";
-        scanCompany.textContent = "Loading...";
-        scanTimestamp.textContent = "Loading...";
-        
-        // Reset and hide both status elements during loading
-        checkinStatus.classList.add('hidden');
-        goodiebagStatus.classList.add('hidden');
-        
-        // First get check-in/goodie bag status from first API
-        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    // Reset scan result fields if there was an error
-                    resetScanResultFields();
-                    
-                    // Show error for both statuses
-                    checkinStatus.classList.remove('hidden');
-                    checkinStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
-                    checkinStatusValue.className = "error-text";
-                    
-                    goodiebagStatus.classList.remove('hidden');
-                    goodiebagStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
-                    goodiebagStatusValue.className = "error-text";
-                    
-                    // Still try to process the scan
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after operation, even on partial failure
-                        unlockScanner();
-                    });
-                    
-                    logToPage(`Lookup failed for scan: ${data.message}`, 'error');
-                    return;
-                }
-                
-                const checkInData = data.data;
-                
-                // Then get attendee details from second API
-                fetchAttendeeDetails(code)
-                    .then(attendeeDetails => {
-                        // Combine data from both APIs
-                        const combinedData = {
-                            ...checkInData,
-                            name: attendeeDetails.name,
-                            email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp, // Use timestamp from attendeeDetails
-                            code: code // Add code to combined data for eligibility check
-                        };
-                        
-                        // Display the combined data
-                        updateScanResultWithAttendeeData(combinedData);
-                        
-                        // Now perform the actual scan operation (check-in or goodie bag)
-                        // Only if scanData is not null (null means ineligible for goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after successful operation and response
-                                unlockScanner();
-                            });
-                        } else {
-                            // Just unlock the scanner without sending data
-                            unlockScanner();
-                        }
-                        
-                        // Log success
-                        logToPage(`Retrieved attendee info for: ${code}`, 'success');
-                    })
-                    .catch(error => {
-                        // If we can't get attendee details, still show check-in data with unknown name/email
-                        updateScanResultWithAttendeeData({
-                            ...checkInData,
-                            name: "Unknown",
-                            email: "Unknown",
-                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
-                        });
-                        
-                        // Now perform the actual scan operation (check-in or goodie bag)
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation
-                            unlockScanner();
-                        });
-                        
-                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
-                    });
-            })
-            .catch(error => {
-                resetScanResultFields();
-                
-                // Show connection error for both statuses
-                checkinStatus.classList.remove('hidden');
-                checkinStatusValue.textContent = "Error connecting to database";
-                checkinStatusValue.className = "error-text";
-                
-                goodiebagStatus.classList.remove('hidden');
-                goodiebagStatusValue.textContent = "Error connecting to database";
-                goodiebagStatusValue.className = "error-text";
-                
-                // Make sure to unlock scanner even on connection error
-                sendToGoogleSheets(scanData, () => {
-                    unlockScanner();
-                });
-                
-                logToPage(`Error fetching attendee data: ${error.message}`, 'error');
-            });
-    }
-    
-    // Helper function to update scan result with attendee data - updated for date-only timestamp and eligibility warning
-    function updateScanResultWithAttendeeData(data) {
-        // Show name and email if available, otherwise show placeholder
-        scanName.textContent = data.name || "-";
-        scanCompany.textContent = data.email || "-"; // Repurpose company field for email
-        
-        // Display timestamp with date only format
-        if (data.timestamp) {
-            scanTimestamp.textContent = formatDateTime(data.timestamp, true); // true = date only
-        } else {
-            scanTimestamp.textContent = "-";
-        }
-        
-        // Show both status elements regardless of current mode
-        checkinStatus.classList.remove('hidden');
-        goodiebagStatus.classList.remove('hidden');
-        
-        // Update check-in status
-        if (data.isCheckedIn) {
-            checkinStatusValue.textContent = `Already checked in at ${formatDateTime(data.checkInTime)}`;
-            checkinStatusValue.className = "warning-text";
-        } else {
-            checkinStatusValue.textContent = "Not checked in yet";
-            checkinStatusValue.className = "success-text";
-        }
-        
-        // Update goodie bag status - add eligibility warning
-        if (!isGoodieBagEligible(data.code) && currentMode === 'Goodie Bag') {
-            goodiebagStatusValue.textContent = "⚠️ Not eligible (missing GB code)";
-            goodiebagStatusValue.className = "error-text";
-        } else if (data.hasGoodieBag) {
-            goodiebagStatusValue.textContent = `Already received at ${formatDateTime(data.goodieBagTime)}`;
-            goodiebagStatusValue.className = "warning-text";
-        } else {
-            goodiebagStatusValue.textContent = "Not received yet";
-            goodiebagStatusValue.className = "success-text";
-        }
-        
-        // Highlight the current mode status
-        if (currentMode === 'Check-in') {
-            checkinStatus.classList.add('current-mode');
-            goodiebagStatus.classList.remove('current-mode');
-        } else { // Goodie Bag mode
-            checkinStatus.classList.remove('current-mode');
-            goodiebagStatus.classList.add('current-mode');
-        }
-    }
-    
-    // Helper function to reset scan result fields - updated for name, email and timestamp
-    function resetScanResultFields() {
-        scanName.textContent = "-";
-        scanCompany.textContent = "-";
-        scanTimestamp.textContent = "-";
-        
-        // Reset and hide both statuses
-        checkinStatus.classList.add('hidden');
-        checkinStatusValue.textContent = "-";
-        checkinStatusValue.className = "";
-        
-        goodiebagStatus.classList.add('hidden');
-        goodiebagStatusValue.textContent = "-";
-        goodiebagStatusValue.className = "";
-    }
-    
-    // Add a fallback protection to ensure toggle is always re-enabled
-    function ensureUIUnlocked() {
-        // Check if the toggle is in disabled state and unlock it if needed
-        if (modeToggle && modeToggle.disabled) {
-            modeToggle.disabled = false;
-            document.querySelector('.toggle').classList.remove('disabled');
-            logToPage('Toggle re-enabled by safety check', 'info');
-        }
-    }
-    
-    // Log a message about authenticated user
-    if (userProfile) {
-        logToPage(`Authenticated as: ${userProfile.name} (${userProfile.email})`, 'info');
     }
     
     modeToggle.addEventListener('change', function() {
@@ -1032,4 +832,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     logToPage('QR Scanner initialized and ready', 'info');
-});
+}

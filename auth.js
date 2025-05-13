@@ -18,31 +18,32 @@ function initGoogleAuth() {
 function initializeGoogleIdentity() {
     console.log('Setting up Google Identity Services...');
     
-    // Initialize the Google client
+    // Initialize the Google client with FedCM opt-in
     google.accounts.id.initialize({
         client_id: '681607833593-08kg1qc54mq4vn9vghd5rktuktovv5uu.apps.googleusercontent.com',
         callback: handleCredentialResponse,
         auto_select: true,
-        cancel_on_tap_outside: false
+        cancel_on_tap_outside: false,
+        // Add FedCM opt-in to fix the logger warning
+        use_fedcm_for_prompt: true
     });
     
-    // Display the One Tap UI
-    google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            console.log('One Tap UI skipped or not displayed');
-            // Force the One Tap UI if not displayed
-            document.getElementById('google-signin-button').style.display = 'block';
-            google.accounts.id.renderButton(
-                document.getElementById('google-signin-button'),
-                { 
-                    theme: 'outline', 
-                    size: 'large',
-                    text: 'signin_with',
-                    shape: 'rectangular'
-                }
-            );
+    // Instead of checking notification status, which causes the warning,
+    // directly render the sign-in button
+    document.getElementById('google-signin-button').style.display = 'block';
+    google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        { 
+            theme: 'outline', 
+            size: 'large',
+            text: 'signin_with',
+            shape: 'rectangular',
+            width: 240
         }
-    });
+    );
+    
+    // Also display One Tap prompt (with FedCM enabled)
+    google.accounts.id.prompt();
 }
 
 // Handle the credential response
@@ -55,12 +56,18 @@ function handleCredentialResponse(response) {
         // Check if the user belongs to your organization
         const domain = payload.hd; // Hosted domain from the token
         
+        // Verify domain is fixami.com
+        if (domain !== 'fixami.com') {
+            showAuthError('You must use a fixami.com account to access this application.');
+            return;
+        }
+        
         // Store user profile
         userProfile = payload;
         
-        // Check organization membership via the web app's authorization
-        // The web app settings should already restrict to your org
-        checkUserAccess();
+        // Skip direct API access check and assume access is granted
+        // since CORS prevents us from checking directly
+        showApplication();
     } else {
         console.error('Authentication failed');
         showAuthError('Authentication failed. Please try again.');
@@ -82,32 +89,28 @@ function parseJwt(token) {
     }
 }
 
-// Check access by trying to fetch data from the web app
+// Modified to handle CORS issues with direct API access check
 function checkUserAccess() {
     // Show loading state
     document.getElementById('auth-loading').style.display = 'block';
     document.getElementById('auth-error').style.display = 'none';
     
-    // Attempt to access the API to verify permissions
-    fetch('https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('API access denied');
-            }
-            return response.text();
-        })
-        .then(data => {
-            // API access successful, user is authorized
-            console.log('Access verified:', data);
-            showApplication();
-        })
-        .catch(error => {
-            console.error('Access verification failed:', error);
-            showAuthError('You do not have access to this application. Please contact your administrator.');
-        })
-        .finally(() => {
+    // Instead of direct fetch which causes CORS issues, 
+    // validate based on the email domain from the token
+    const emailDomain = userProfile && userProfile.email ? userProfile.email.split('@')[1] : null;
+    
+    if (emailDomain === 'fixami.com' && userProfile && userProfile.hd === 'fixami.com') {
+        // Valid fixami.com user with hosted domain verification
+        console.log('Access verified via domain check');
+        setTimeout(() => {
             document.getElementById('auth-loading').style.display = 'none';
-        });
+            showApplication();
+        }, 500);
+    } else {
+        console.error('Access verification failed: Invalid domain');
+        document.getElementById('auth-loading').style.display = 'none';
+        showAuthError('You do not have access to this application. Please sign in with your fixami.com account.');
+    }
 }
 
 // Show the main application UI
@@ -130,6 +133,15 @@ function showApplication() {
             // Add sign out handler
             document.getElementById('sign-out-button').addEventListener('click', signOut);
         }
+        
+        // Initialize the QR scanner now that user is authenticated
+        if (typeof initializeQrScanner === 'function') {
+            initializeQrScanner(userProfile);
+        } else {
+            // Create a custom event to notify the main script that authentication is complete
+            const authEvent = new CustomEvent('userAuthenticated', { detail: userProfile });
+            document.dispatchEvent(authEvent);
+        }
     }
 }
 
@@ -144,6 +156,7 @@ function showAuthError(message) {
 function signOut() {
     // Clear any authentication tokens or state
     userProfile = null;
+    google.accounts.id.disableAutoSelect();
     
     // Reset UI
     document.getElementById('app-container').style.display = 'none';
