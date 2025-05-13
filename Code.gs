@@ -6,8 +6,8 @@
 
 // Set CORS headers for web app - Fix to properly allow access from GitHub Pages
 function setCorsHeaders(resp) {
-  // Allow access specifically from your GitHub Pages site and localhost for testing
-  resp.setHeader('Access-Control-Allow-Origin', 'https://dgfixami.github.io');
+  // Allow access from any origin for testing
+  resp.setHeader('Access-Control-Allow-Origin', '*');
   resp.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   resp.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   return resp;
@@ -20,21 +20,27 @@ function doOptions(e) {
   return resp;
 }
 
-// Modify your existing doGet function to include CORS headers
+// This function will be called when the web app is deployed as a web app
 function doGet(e) {
-  var resp;
+  // Set CORS headers for all responses
+  var output = ContentService.createTextOutput();
+  output = setCorsHeaders(output);
   
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    resp = handleLookup(e.parameter.code);
-  } else {
-    // Default response for simple testing
-    resp = ContentService.createTextOutput("QR Code API is running");
+    var lookupResult = handleLookup(e.parameter.code);
+    return lookupResult;
   }
   
-  // Add CORS headers
-  resp = setCorsHeaders(resp);
-  return resp;
+  // Default response for testing
+  output.setContent(JSON.stringify({
+    success: true,
+    message: "QR Code API is running",
+    timestamp: new Date().toISOString()
+  }));
+  
+  output.setMimeType(ContentService.MimeType.JSON);
+  return output;
 }
 
 // Update handleLookup function for new column structure

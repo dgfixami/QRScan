@@ -101,30 +101,228 @@ function initializeQrScanner(userProfile) {
     // New variable to track if a scan is in process
     let isScanning = false;
     
-    // Google Apps Script web app URLs - one for check-in/goodie bag, one for attendee details
+    // Google Apps Script web app URLs - UPDATED with properly formatted execution URLs
     // Modified to use JSONP approach to avoid CORS issues
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
     const attendeeApiUrl = 'https://script.google.com/macros/s/AKfycbwq4-bWqzLPeV7bOaXllswGmjir-U9tmQr7eq6EUUq5-xSpVVgvAfxWtQNEIwMKVSI0/exec';
     
-    // Setup lookup button click handler
-    if(lookupButton) {
-        lookupButton.addEventListener('click', function() {
-            lookupAttendee();
-        });
+    // Add a simpler fallback method for direct data fetching that works with deployed scripts
+    function simpleFetchWithFallback(url, callback) {
+        // Try direct fetch first
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                callback(data);
+            })
+            .catch(error => {
+                console.error("Fetch error:", error);
+                // If fetch fails, try a different approach with form submission
+                submitFormForData(url, callback);
+            });
     }
     
-    // Setup lookup input enter key handler
-    if(lookupCode) {
-        lookupCode.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                lookupAttendee();
+    // Helper function to submit a form to get around CORS issues
+    function submitFormForData(url, callback) {
+        // Create a hidden iframe to receive the response
+        const frameId = 'hidden-data-frame-' + Math.floor(Math.random() * 1000000);
+        const iframe = document.createElement('iframe');
+        iframe.id = frameId;
+        iframe.name = frameId;
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        // Create a form to submit
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.target = frameId;
+        form.action = url;
+        document.body.appendChild(form);
+        
+        // Set a timeout for cleanup
+        const timeoutId = setTimeout(() => {
+            if (document.body.contains(iframe)) {
+                document.body.removeChild(iframe);
+            }
+            if (document.body.contains(form)) {
+                document.body.removeChild(form);
+            }
+            callback(null); // Call with null to indicate failure
+            logToPage('Data fetch timed out', 'error');
+        }, 15000);
+        
+        // When the iframe loads, extract data if possible
+        iframe.onload = () => {
+            clearTimeout(timeoutId);
+            
+            try {
+                // Try to get content from the iframe
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const content = iframeDoc.body.innerText || iframeDoc.body.textContent;
+                
+                // Try to parse JSON
+                if (content) {
+                    const data = JSON.parse(content);
+                    callback(data);
+                } else {
+                    callback(null);
+                    logToPage('No data received from server', 'warning');
+                }
+            } catch (e) {
+                console.error("Error processing iframe response:", e);
+                callback(null);
+                logToPage('Error processing server response', 'error');
+            } finally {
+                // Clean up
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+                if (document.body.contains(form)) {
+                    document.body.removeChild(form);
+                }
+            }
+        };
+        
+        // Submit the form
+        form.submit();
+    }
+    
+    // Replace the JSONP functions with these more reliable versions
+    function fetchAttendeeDataWithJSONP(code, callback) {
+        logToPage('Fetching attendee data...', 'info');
+        simpleFetchWithFallback(`${scriptUrl}?code=${encodeURIComponent(code)}`, callback);
+    }
+    
+    function fetchAttendeeDetailsWithJSONP(code, callback) {
+        logToPage('Fetching attendee details...', 'info');
+        simpleFetchWithFallback(`${attendeeApiUrl}?code=${encodeURIComponent(code)}`, callback);
+    }
+    
+    // Modified function to send data to Google Sheets with callback
+    function sendToGoogleSheets(scanData, callback) {
+        // Show sending status
+        logToPage('Sending data to Google Sheets...', 'info');
+        
+        // Add user information to the scan data
+        if (userProfile) {
+            scanData.userName = userProfile.name;
+            scanData.userEmail = userProfile.email;
+        }
+        
+        // Create a form with the scan data that will be submitted to the web app
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.target = 'hidden-iframe';
+        form.action = scriptUrl;
+        form.style.display = 'none';
+        
+        // Add the data as form fields
+        const dataField = document.createElement('input');
+        dataField.type = 'hidden';
+        dataField.name = 'data';
+        dataField.value = JSON.stringify(scanData);
+        form.appendChild(dataField);
+        
+        // Create hidden iframe to receive the response
+        let iframe = document.getElementById('hidden-iframe');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.name = 'hidden-iframe';
+            iframe.id = 'hidden-iframe';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+        }
+        
+        // Set up a flag to track if the callback has been called
+        let callbackCalled = false;
+        
+        // Set up message listening for response from iframe
+        window.addEventListener('message', function receiveMessage(event) {
+            // Only process messages from our script domains
+            if (event.origin.includes('script.google.com')) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.status === 'success') {
+                        logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
+                    } else {
+                        logToPage(`Error from Google Sheets: ${data.message}`, 'error');
+                        alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
+                    }
+                } catch (e) {
+                    console.log('Received non-JSON message from iframe', event.data);
+                }
+                
+                // Clean up
+                window.removeEventListener('message', receiveMessage);
+                
+                // Execute callback if not already called
+                if (!callbackCalled) {
+                    callbackCalled = true;
+                    if (typeof callback === 'function') {
+                        callback();
+                    } else {
+                        unlockScanner();
+                    }
+                }
             }
         });
-    }
-
-    // Log a message about authenticated user
-    if (userProfile) {
-        logToPage(`Authenticated as: ${userProfile.name} (${userProfile.email})`, 'info');
+        
+        // When iframe loads, check for any content
+        iframe.onload = function() {
+            try {
+                // Check if iframe has content
+                if (iframe.contentDocument && iframe.contentDocument.body) {
+                    const content = iframe.contentDocument.body.innerText || iframe.contentDocument.body.textContent;
+                    if (content) {
+                        try {
+                            const data = JSON.parse(content);
+                            if (data.success) {
+                                logToPage(`Form submission successful: ${data.message || "Operation completed"}`, 'success');
+                            } else {
+                                logToPage(`Form submission error: ${data.message || "Unknown error"}`, 'error');
+                            }
+                            
+                            // Execute callback if not already called
+                            if (!callbackCalled) {
+                                callbackCalled = true;
+                                if (typeof callback === 'function') {
+                                    callback();
+                                } else {
+                                    unlockScanner();
+                                }
+                            }
+                        } catch (e) {
+                            console.log('Received non-JSON response:', content);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error processing iframe content:', e);
+            }
+        };
+        
+        // Add form to body and submit it
+        document.body.appendChild(form);
+        form.submit();
+        
+        // Remove form after submission
+        setTimeout(() => {
+            if (document.body.contains(form)) {
+                document.body.removeChild(form);
+            }
+        }, 100);
+        
+        // Set a timeout to ensure unlock happens even if there's no response
+        setTimeout(() => {
+            if (!callbackCalled) {
+                callbackCalled = true;
+                logToPage('Response timeout - operation may have completed', 'warning');
+                if (typeof callback === 'function') {
+                    callback();
+                } else {
+                    unlockScanner();
+                }
+            }
+        }, 10000);
     }
     
     // Updated helper function to format dates with day of the week
@@ -530,118 +728,6 @@ function initializeQrScanner(userProfile) {
         });
     }
     
-    // Modified function to send data to Google Sheets with callback
-    function sendToGoogleSheets(scanData, callback) {
-        // Show sending status
-        logToPage('Sending data to Google Sheets...', 'info');
-        
-        // Add user information to the scan data
-        if (userProfile) {
-            scanData.userName = userProfile.name;
-            scanData.userEmail = userProfile.email;
-        }
-        
-        // Create a form with the scan data that will be submitted to the web app
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.target = 'hidden-iframe';
-        form.action = scriptUrl;
-        form.style.display = 'none';
-        
-        // Add the data as form fields
-        const dataField = document.createElement('input');
-        dataField.type = 'hidden';
-        dataField.name = 'data';
-        dataField.value = JSON.stringify(scanData);
-        form.appendChild(dataField);
-        
-        // Create hidden iframe to receive the response
-        let iframe = document.getElementById('hidden-iframe');
-        if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.name = 'hidden-iframe';
-            iframe.id = 'hidden-iframe';
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-        }
-        
-        // Set up message listening for response from iframe
-        window.addEventListener('message', function receiveMessage(event) {
-            // Only process messages from our script domains
-            if (event.origin.includes('script.google.com')) {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.status === 'success') {
-                        logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
-                    } else {
-                        logToPage(`Error from Google Sheets: ${data.message}`, 'error');
-                        alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
-                    }
-                } catch (e) {
-                    console.log('Received non-JSON message from iframe', event.data);
-                }
-                
-                // Clean up
-                window.removeEventListener('message', receiveMessage);
-                
-                // Execute callback
-                if (typeof callback === 'function') {
-                    callback();
-                } else {
-                    unlockScanner();
-                }
-            }
-        });
-        
-        // Add form to body and submit it
-        document.body.appendChild(form);
-        form.submit();
-        
-        // Remove form after submission
-        setTimeout(() => {
-            document.body.removeChild(form);
-        }, 100);
-        
-        // Set a timeout to ensure unlock happens even if there's no response
-        setTimeout(() => {
-            if (typeof callback === 'function') {
-                callback();
-            } else {
-                unlockScanner();
-            }
-        }, 5000);
-    }
-    
-    // Show lookup error
-    function showLookupError(message) {
-        lookupResult.innerHTML = `
-            <div class="lookup-error">
-                <p>⚠️ ${message}</p>
-            </div>
-        `;
-        lookupResult.classList.remove('hidden');
-    }
-    
-    // Function to log messages to the page
-    function logToPage(message, type = 'info') {
-        if (message === undefined) {
-            message = "Unknown error occurred (undefined message)";
-            type = 'warning';
-        } else if (message === '') {
-            message = "Empty message received";
-            type = 'warning';
-        }
-        
-        const logEntry = document.createElement('div');
-        logEntry.className = `log-entry ${type}`;
-        
-        const timestamp = new Date().toLocaleTimeString();
-        logEntry.textContent = `${timestamp}: ${message}`;
-        
-        logMessages.prepend(logEntry);
-        console.log(`[${type.toUpperCase()}] ${message}`);
-    }
-    
     modeToggle.addEventListener('change', function() {
         currentMode = this.checked ? 'Goodie Bag' : 'Check-in';
         modeValue.textContent = currentMode;
@@ -1002,126 +1088,6 @@ function initializeQrScanner(userProfile) {
                 logToPage(`Retrieved attendee info for: ${code}`, 'success');
             });
         });
-    }
-    
-    // New function to fetch data using JSONP approach (iframe-based)
-    function fetchAttendeeDataWithJSONP(code, callback) {
-        // Create a unique callback name
-        const callbackName = 'attendeeCallback_' + Math.floor(Math.random() * 1000000);
-        
-        // Create a listener for the message from the iframe
-        window[callbackName] = function(data) {
-            // Clean up
-            delete window[callbackName];
-            document.body.removeChild(iframe);
-            
-            // Call the callback with the data
-            callback(data);
-        };
-        
-        // Create an iframe to load the data
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.onload = function() {
-            // Add a timeout in case the script doesn't respond
-            setTimeout(function() {
-                if (window[callbackName]) {
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    callback(null); // Call with null to indicate failure
-                    logToPage('Data fetch timed out', 'error');
-                }
-            }, 10000); // 10 seconds timeout
-        };
-        
-        // Use a form POST to avoid URL length limitations
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.target = 'jsonp-iframe-' + callbackName;
-        form.action = scriptUrl + '?callback=' + callbackName + '&code=' + encodeURIComponent(code);
-        
-        // Add a field to indicate this is a JSONP request
-        const jsonpField = document.createElement('input');
-        jsonpField.type = 'hidden';
-        jsonpField.name = 'jsonp';
-        jsonpField.value = 'true';
-        form.appendChild(jsonpField);
-        
-        // Set the iframe name to match the form target
-        iframe.name = 'jsonp-iframe-' + callbackName;
-        iframe.id = 'jsonp-iframe-' + callbackName;
-        
-        // Append the iframe and form to the document
-        document.body.appendChild(iframe);
-        document.body.appendChild(form);
-        
-        // Submit the form
-        form.submit();
-        
-        // Remove the form after submission
-        document.body.removeChild(form);
-        
-        logToPage('Fetching attendee data using JSONP...', 'info');
-    }
-    
-    // Similar function for attendee details API
-    function fetchAttendeeDetailsWithJSONP(code, callback) {
-        // Create a unique callback name
-        const callbackName = 'detailsCallback_' + Math.floor(Math.random() * 1000000);
-        
-        // Create a listener for the message from the iframe
-        window[callbackName] = function(data) {
-            // Clean up
-            delete window[callbackName];
-            document.body.removeChild(iframe);
-            
-            // Call the callback with the data
-            callback(data);
-        };
-        
-        // Create an iframe to load the data
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.onload = function() {
-            // Add a timeout in case the script doesn't respond
-            setTimeout(function() {
-                if (window[callbackName]) {
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    callback(null); // Call with null to indicate failure
-                    logToPage('Attendee details fetch timed out', 'error');
-                }
-            }, 10000); // 10 seconds timeout
-        };
-        
-        // Use a form POST to avoid URL length limitations
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.target = 'jsonp-iframe-' + callbackName;
-        form.action = attendeeApiUrl + '?callback=' + callbackName + '&code=' + encodeURIComponent(code);
-        
-        // Add a field to indicate this is a JSONP request
-        const jsonpField = document.createElement('input');
-        jsonpField.type = 'hidden';
-        jsonpField.name = 'jsonp';
-        jsonpField.value = 'true';
-        form.appendChild(jsonpField);
-        
-        // Set the iframe name to match the form target
-        iframe.name = 'jsonp-iframe-' + callbackName;
-        iframe.id = 'jsonp-iframe-' + callbackName;
-        
-        // Append the iframe and form to the document
-        document.body.appendChild(iframe);
-        document.body.appendChild(form);
-        
-        // Submit the form
-        form.submit();
-        
-        // Remove the form after submission
-        document.body.removeChild(form);
-        
-        logToPage('Fetching attendee details using JSONP...', 'info');
     }
     
     function updateScanResultWithAttendeeData(data) {

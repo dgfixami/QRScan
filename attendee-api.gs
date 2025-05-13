@@ -2,10 +2,10 @@
 // This file should be created in the Google Apps Script editor at:
 // https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec
 
-// Set CORS headers for web app
+// Modify setCorsHeaders to accept any origin
 function setCorsHeaders(resp) {
-  // Allow access specifically from your GitHub Pages site and localhost for testing
-  resp.setHeader('Access-Control-Allow-Origin', 'https://dgfixami.github.io');
+  // Allow access from any origin for testing
+  resp.setHeader('Access-Control-Allow-Origin', '*');
   resp.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   resp.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   return resp;
@@ -18,30 +18,27 @@ function doOptions(e) {
   return resp;
 }
 
-// Define the doGet function to handle GET requests from testing
+// Update the doGet function to handle direct requests
 function doGet(e) {
-  var resp;
+  // Set CORS headers for all responses
+  var output = ContentService.createTextOutput();
+  output = setCorsHeaders(output);
   
   // Check if this is a lookup request
   if (e && e.parameter && e.parameter.code) {
-    resp = handleLookup(e.parameter.code);
-    
-    // Check if this is a JSONP request
-    if (e.parameter.callback) {
-      // Wrap the response in the JSONP callback
-      const jsonpResponse = ContentService.createTextOutput(
-        e.parameter.callback + '(' + resp.getContent() + ');'
-      ).setMimeType(ContentService.MimeType.JAVASCRIPT);
-      return setCorsHeaders(jsonpResponse);
-    }
-    
-    // Regular JSON response with CORS headers
-    return setCorsHeaders(resp);
+    var lookupResult = handleLookup(e.parameter.code);
+    return lookupResult; // This already has the correct content type set
   }
   
-  // Default response for simple testing
-  resp = ContentService.createTextOutput("QR Code API is running");
-  return setCorsHeaders(resp);
+  // Default response for testing
+  output.setContent(JSON.stringify({
+    success: true,
+    message: "Attendee API is running",
+    timestamp: new Date().toISOString()
+  }));
+  
+  output.setMimeType(ContentService.MimeType.JSON);
+  return output;
 }
 
 // Update handleLookup function for new column structure
