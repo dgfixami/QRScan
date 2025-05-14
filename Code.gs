@@ -146,6 +146,14 @@ function doPost(e) {
           sheet.getRange(foundRow, 3).setValue(timestamp);
         }
         
+        // Track who did the check-in (optionally in new columns)
+        if (data.operatedBy) {
+          sheet.getRange(foundRow, 9).setValue(data.operatedBy); // Column I for operator name
+        }
+        if (data.operatorEmail) {
+          sheet.getRange(foundRow, 10).setValue(data.operatorEmail); // Column J for operator email
+        }
+        
         Logger.log("Updated Check-in status and timestamp for code: " + data.code + " in row " + foundRow);
       } else {
         Logger.log("Check-in already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
@@ -164,6 +172,14 @@ function doPost(e) {
           sheet.getRange(foundRow, 5).setValue(timestamp);
         }
         
+        // Track who did the goodie bag action (optionally in new columns)
+        if (data.operatedBy) {
+          sheet.getRange(foundRow, 11).setValue(data.operatedBy); // Column K for goodie bag operator name
+        }
+        if (data.operatorEmail) {
+          sheet.getRange(foundRow, 12).setValue(data.operatorEmail); // Column L for goodie bag operator email
+        }
+        
         Logger.log("Updated Goodie Bag status and timestamp for code: " + data.code + " in row " + foundRow);
       } else {
         Logger.log("Goodie Bag already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
@@ -172,8 +188,8 @@ function doPost(e) {
       return createResponse(false, "Invalid mode: " + data.mode);
     }
     
-    // You can also log the scan in a dedicated log sheet
-    logScan(data, foundRow, timestamp);
+    // Log the scan with operator info
+    logScanWithOperator(data, foundRow, timestamp);
     
     // Return success response
     return createResponse(true, "QR code processed successfully for mode: " + data.mode);
@@ -181,6 +197,42 @@ function doPost(e) {
   } catch (error) {
     Logger.log("Error: " + error.toString());
     return createResponse(false, "Error processing request: " + error.toString());
+  }
+}
+
+// Updated helper function to log scans with operator information
+function logScanWithOperator(data, rowNumber, timestamp) {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Try to get the log sheet, create it if it doesn't exist
+    let logSheet = spreadsheet.getSheetByName("ScanLog");
+    if (!logSheet) {
+      logSheet = spreadsheet.insertSheet("ScanLog");
+      // Add headers with operator columns
+      logSheet.appendRow([
+        "Timestamp", 
+        "QR Code", 
+        "Mode", 
+        "Row Updated", 
+        "Status",
+        "Operator Name",
+        "Operator Email"
+      ]);
+    }
+    
+    // Append the scan data with operator info
+    logSheet.appendRow([
+      timestamp, 
+      data.code, 
+      data.mode,
+      rowNumber > 0 ? rowNumber : "Not Found",
+      rowNumber > 0 ? "Updated" : "Not Found",
+      data.operatedBy || "Unknown",
+      data.operatorEmail || "Unknown"
+    ]);
+  } catch (error) {
+    Logger.log("Error logging scan: " + error.toString());
   }
 }
 
