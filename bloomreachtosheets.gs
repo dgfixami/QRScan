@@ -50,10 +50,8 @@ function updateBloomreachReport() {
       sheet = spreadsheet.insertSheet("bloomreach_report");
     }
     
-    // Add headers first
-    if (data.header) {
-      sheet.appendRow(data.header);
-    }
+    // Skip adding headers from API response
+    // No longer adding: sheet.appendRow(data.header);
     
     // Sort rows by voucher code (column H, index 7)
     var columnIndexForVoucher = 7;
