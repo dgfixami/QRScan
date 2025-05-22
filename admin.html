@@ -9,8 +9,10 @@
         // Check if user is authenticated as admin before showing content
         document.addEventListener('DOMContentLoaded', function() {
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-            if (!currentAdmin || currentAdmin.email !== 'dawid.garstecki@fixami.com') {
-                // Redirect to login page if not admin
+            
+            // If admin data exists, verify domain using hd property
+            if (!currentAdmin || currentAdmin.hd !== 'fixami.com') {
+                // Redirect to login page if not from fixami.com domain
                 window.location.href = 'login.html';
             }
         });

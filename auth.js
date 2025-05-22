@@ -154,13 +154,14 @@ function handleCredentialResponse(response) {
     // Decode the JWT token from Google
     const responsePayload = decodeJwtResponse(response.credential);
     
-    // Check if the email is authorized for admin access
-    if (responsePayload.email === 'dawid.garstecki@fixami.com') {
+    // Check if the user belongs to fixami.com domain using hd parameter
+    if (responsePayload.hd === 'fixami.com') {
         // Save admin session
         const adminData = {
             name: responsePayload.name,
             email: responsePayload.email,
-            picture: responsePayload.picture
+            picture: responsePayload.picture,
+            hd: responsePayload.hd
         };
         
         localStorage.setItem('qrscan_current_admin', JSON.stringify(adminData));
@@ -168,8 +169,8 @@ function handleCredentialResponse(response) {
         // Redirect to admin panel
         window.location.href = 'admin.html';
     } else {
-        // Show unauthorized message
-        showMessage('login-message', 'You are unauthorized.', 'error');
+        // Show unauthorized message with domain requirement
+        showMessage('login-message', 'Only users with a Fixami.com Google Workspace account can access the admin panel.', 'error');
     }
 }
 
@@ -225,7 +226,13 @@ function initializeAuthSystem() {
 // Check if a user is admin and currently logged in
 function isAdminLoggedIn() {
     const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-    return !!currentAdmin && currentAdmin.email === 'dawid.garstecki@fixami.com';
+    
+    if (!currentAdmin) {
+        return false;
+    }
+    
+    // Check if the user belongs to fixami.com domain using hd property
+    return currentAdmin.hd === 'fixami.com';
 }
 
 // Check if IP is in the whitelist
