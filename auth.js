@@ -169,7 +169,7 @@ function handleCredentialResponse(response) {
         window.location.href = 'admin.html';
     } else {
         // Show unauthorized message
-        showMessage('login-message', 'Unauthorized email. Only dawid.garstecki@fixami.com can access admin panel.', 'error');
+        showMessage('login-message', 'You are unauthorized.', 'error');
     }
 }
 
