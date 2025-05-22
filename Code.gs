@@ -172,7 +172,7 @@ function doPost(e) {
       return createResponse(false, "Invalid mode: " + data.mode);
     }
     
-    // You can also log the scan in a dedicated log sheet with user information
+    // You can also log the scan in a dedicated log sheet
     logScan(data, foundRow, timestamp);
     
     // Return success response
@@ -194,22 +194,16 @@ function logScan(data, rowNumber, timestamp) {
     if (!logSheet) {
       logSheet = spreadsheet.insertSheet("ScanLog");
       // Add headers
-      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status", "Scanned By", "User Type"]);
+      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status"]);
     }
     
-    // Get user info from data
-    const scannerName = data.scannedBy || "Unknown User";
-    const userType = data.isAdmin ? "Admin" : "Regular User";
-    
-    // Append the scan data with user info
+    // Append the scan data
     logSheet.appendRow([
       timestamp, 
       data.code, 
       data.mode,
       rowNumber > 0 ? rowNumber : "Not Found",
-      rowNumber > 0 ? "Updated" : "Not Found",
-      scannerName, // Add the user's name
-      userType     // Add user type (admin or regular)
+      rowNumber > 0 ? "Updated" : "Not Found"
     ]);
   } catch (error) {
     Logger.log("Error logging scan: " + error.toString());
