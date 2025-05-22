@@ -5,10 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        // Inline script to immediately check access before loading content
+        (function() {
+            // If admin is logged in, they can always access
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+            if (currentAdmin) {
+                return; // Admin can access
+            }
+            
+            // Otherwise redirect to auth.js to do IP check
+            // This is just to ensure the page doesn't briefly show before redirecting
+            window.location.href = 'auth-check.html';
+        })();
+    </script>
 </head>
 <body>
     <div class="container">
-        <h1>QR Code Scanner</h1>
+        <div class="header-bar">
+            <h1>QR Code Scanner</h1>
+            <div class="header-actions">
+                <div id="user-info" class="user-info-display">
+                    <span id="user-display-name">User</span>
+                </div>
+                <button id="logout-btn" class="logout-button">Exit</button>
+            </div>
+        </div>
         
         <div class="toggle-container">
             <div class="toggle-with-labels">
@@ -58,6 +80,7 @@
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="auth.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

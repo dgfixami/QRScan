@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - QR Code Scanner</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="auth-container">
+        <h1>QR Code Scanner</h1>
+        <h2>Admin Login</h2>
+        
+        <div id="login-message" class="auth-message" style="display: none;"></div>
+        
+        <p class="login-info">Admin access requires Google authentication with an authorized email address.</p>
+        
+        <div class="google-login-container">
+            <div id="g_id_onload"
+                data-client_id="681607833593-08kg1qc54mq4vn9vghd5rktuktovv5uu.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse"
+                data-auto_prompt="false">
+            </div>
+            <div class="g_id_signin"
+                data-type="standard"
+                data-size="large"
+                data-theme="outline"
+                data-text="sign_in_with"
+                data-shape="rectangular"
+                data-logo_alignment="center">
+            </div>
+        </div>
+        
+        <div class="auth-links">
+            <p>Need scanner access? <a href="request-access.html">Request Access</a></p>
+        </div>
+    </div>
+    
+    <script src="auth.js"></script>
+</body>
+</html>

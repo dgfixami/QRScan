@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Access - QR Code Scanner</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <h1>QR Code Scanner</h1>
+        <h2>Request Access</h2>
+        
+        <div id="request-message" class="auth-message" style="display: none;"></div>
+        
+        <div class="ip-info">
+            <p>Your device will be identified using IP: <span id="user-ip" class="ip-address">Loading...</span></p>
+        </div>
+        
+        <!-- New element to display pending request status -->
+        <div id="request-status" class="request-status" style="display: none;"></div>
+        
+        <form class="auth-form" id="request-form">
+            <input type="text" id="request-name" placeholder="Your Name" required>
+            <button type="submit">Submit Request</button>
+        </form>
+        
+        <div class="auth-links">
+            <p>Admin? <a href="login.html">Login</a></p>
+        </div>
+    </div>
+    
+    <script src="auth.js"></script>
+</body>
+</html>

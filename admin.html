@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - QR Code Scanner</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Check if user is authenticated as admin before showing content
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+            if (!currentAdmin || currentAdmin.email !== 'dawid.garstecki@fixami.com') {
+                // Redirect to login page if not admin
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="header-bar">
+            <h1>Admin Panel</h1>
+            <div class="admin-user-info">
+                <div class="admin-profile" id="admin-profile">
+                    <!-- Will be populated with admin info -->
+                </div>
+                <div>
+                    <button id="scanner-link" class="admin-btn edit">Go to Scanner</button>
+                    <button id="admin-logout" class="logout-button">Logout</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="admin-tabs">
+            <button class="admin-tab active" data-tab="access-requests">Access Requests</button>
+            <button class="admin-tab" data-tab="ip-whitelist">IP Whitelist</button>
+        </div>
+        
+        <div id="access-requests" class="admin-panel-section active">
+            <h2>Access Requests</h2>
+            <div class="section-description">
+                <p>Review access requests from users. Each request is linked to a specific IP address.</p>
+            </div>
+            <div id="request-list">
+                <!-- Request items will be added here dynamically -->
+                <p class="no-items-message">No pending access requests.</p>
+            </div>
+        </div>
+        
+        <div id="ip-whitelist" class="admin-panel-section">
+            <h2>IP Whitelist</h2>
+            <button id="add-ip-btn" class="admin-btn edit">Add New IP</button>
+            <div id="ip-list">
+                <!-- IP items will be added here dynamically -->
+                <p class="no-items-message">No whitelisted IP addresses.</p>
+            </div>
+        </div>
+        
+        <!-- Add IP Modal -->
+        <dialog id="add-ip-modal">
+            <h3>Add New IP Address</h3>
+            <form id="add-ip-form" class="auth-form">
+                <input type="text" id="new-ip-name" placeholder="User Name" required>
+                <input type="text" id="new-ip-address" placeholder="IP Address (e.g. 192.168.1.1)" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                <div>
+                    <button type="submit" class="admin-btn approve">Add IP</button>
+                    <button type="button" id="cancel-add-ip" class="admin-btn reject">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+    </div>
+    
+    <script>
+        // Display admin info
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+            if (currentAdmin) {
+                const profileDiv = document.getElementById('admin-profile');
+                if (profileDiv) {
+                    profileDiv.innerHTML = `
+                        <img src="${currentAdmin.picture}" alt="${currentAdmin.name}" class="admin-avatar">
+                        <span class="admin-name">${currentAdmin.name}</span>
+                    `;
+                }
+            }
+        });
+    </script>
+    
+    <script src="auth.js"></script>
+</body>
+</html>

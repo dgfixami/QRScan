@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checking Access - QR Code Scanner</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+        }
+        
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-container">
+        <div class="spinner"></div>
+        <h2>Checking access permissions...</h2>
+        <p>Please wait while we verify your device.</p>
+    </div>
+    
+    <script>
+        // Immediately check IP when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // First check if this is an admin
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+            if (currentAdmin && currentAdmin.email === 'dawid.garstecki@fixami.com') {
+                // Admin can access without IP check
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            // Function to get IP and check access
+            async function checkAccess() {
+                try {
+                    // Get IP address
+                    const response = await fetch('https://api.ipify.org?format=json');
+                    const data = await response.json();
+                    const ipAddress = data.ip;
+                    
+                    // Store IP in session
+                    sessionStorage.setItem('user_ip', ipAddress);
+                    
+                    // Check whitelist in localStorage
+                    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+                    const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+                    
+                    if (isWhitelisted) {
+                        // Store info and redirect to main page
+                        const userEntry = whitelist.find(entry => entry.ip === ipAddress);
+                        sessionStorage.setItem('user_name', userEntry.name);
+                        window.location.href = 'index.html';
+                    } else {
+                        // Not whitelisted, redirect to request access
+                        window.location.href = 'request-access.html';
+                    }
+                } catch (error) {
+                    console.error("Error checking access:", error);
+                    // Show error and link to request access
+                    document.querySelector('.loading-container').innerHTML = `
+                        <h2>Error Checking Access</h2>
+                        <p>Unable to verify your device. Please try again or request access.</p>
+                        <a href="request-access.html" class="retry-button">Request Access</a>
+                    `;
+                }
+            }
+            
+            // Start the check
+            checkAccess();
+        });
+    </script>
+</body>
+</html>

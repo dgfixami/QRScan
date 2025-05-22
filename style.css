@@ -556,3 +556,306 @@ img[alt="Info icon"] {
     color: #666;
     font-style: italic;
 }
+
+/* Header bar with logout button */
+.header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.logout-button {
+    padding: 8px 15px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.logout-button:hover {
+    background-color: #d32f2f;
+}
+
+/* IP address display styles */
+.ip-info {
+    background-color: #f5f5f5;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    font-size: 14px;
+    text-align: left;
+}
+
+.ip-address {
+    font-weight: bold;
+    color: #2196F3;
+    font-family: monospace;
+}
+
+.user-info-display {
+    display: inline-block;
+    margin-right: 15px;
+    font-size: 14px;
+    background-color: #f1f1f1;
+    padding: 4px 10px;
+    border-radius: 15px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+}
+
+/* Login and access request styles */
+.auth-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 30px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    margin-top: 20px;
+}
+
+.auth-form input {
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+.auth-form button {
+    padding: 12px;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.auth-form button:hover {
+    background-color: #0b7dda;
+}
+
+.auth-links {
+    margin-top: 20px;
+    font-size: 14px;
+}
+
+.auth-links a {
+    color: #2196F3;
+    text-decoration: none;
+}
+
+.auth-links a:hover {
+    text-decoration: underline;
+}
+
+.auth-message {
+    margin: 15px 0;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.auth-message.error {
+    background-color: #ffebee;
+    color: #d32f2f;
+    border: 1px solid #ffcdd2;
+}
+
+.auth-message.success {
+    background-color: #e8f5e9;
+    color: #388e3c;
+    border: 1px solid #c8e6c9;
+}
+
+/* Admin panel styles */
+.admin-container {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.admin-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.admin-section:last-child {
+    border-bottom: none;
+}
+
+.user-item, .request-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin-bottom: 10px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    border-left: 3px solid #2196F3;
+}
+
+.user-info, .request-info {
+    flex: 1;
+}
+
+.user-actions, .request-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.admin-btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.admin-btn.approve {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.admin-btn.reject, .admin-btn.delete {
+    background-color: #f44336;
+    color: white;
+}
+
+.admin-btn.edit {
+    background-color: #2196F3;
+    color: white;
+}
+
+.admin-tabs {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.admin-tab {
+    padding: 10px 20px;
+    background-color: #f1f1f1;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.admin-tab.active {
+    background-color: #2196F3;
+    color: white;
+}
+
+.admin-panel-section {
+    display: none;
+}
+
+.admin-panel-section.active {
+    display: block;
+}
+
+.no-items-message {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Pending request status styles */
+.request-status {
+    margin: 15px 0;
+    padding: 0;
+}
+
+.pending-request {
+    background-color: #fff8e0;
+    border: 1px solid #ffd54f;
+    border-radius: 5px;
+    padding: 15px;
+    color: #ff8f00;
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.pending-request p {
+    margin: 5px 0;
+}
+
+.disabled-button {
+    background-color: #cccccc !important;
+    cursor: not-allowed !important;
+}
+
+/* Style for disabled form inputs */
+input:disabled {
+    background-color: #f5f5f5;
+    color: #666;
+    cursor: not-allowed;
+}
+
+/* Google login styles */
+.google-login-container {
+    margin: 20px 0;
+    display: flex;
+    justify-content: center;
+}
+
+.login-info {
+    margin: 20px 0;
+    color: #666;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* Admin profile styles */
+.admin-user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.admin-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #f5f5f5;
+    padding: 5px 10px;
+    border-radius: 20px;
+}
+
+.admin-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+}
+
+.admin-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+}
+
+.section-description {
+    margin-bottom: 20px;
+    color: #666;
+    font-size: 14px;
+}
