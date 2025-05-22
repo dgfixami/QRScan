@@ -43,7 +43,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             // First check if this is an admin
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-            if (currentAdmin && currentAdmin.email === 'dawid.garstecki@fixami.com') {
+            if (currentAdmin && currentAdmin.hd === 'fixami.com') {
+                // Store admin name in session storage for consistent logging
+                sessionStorage.setItem('user_name', currentAdmin.name);
                 // Admin can access without IP check
                 window.location.href = 'index.html';
                 return;

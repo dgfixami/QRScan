@@ -474,6 +474,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
         
+        // Add user information to the scan data
+        const userName = sessionStorage.getItem('user_name') || 'Unknown User';
+        const isAdmin = !!JSON.parse(localStorage.getItem('qrscan_current_admin'));
+        const adminData = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+        
+        // Include who performed the scan (admin name from Google or regular user name)
+        scanData.scannedBy = isAdmin ? adminData.name : userName;
+        scanData.isAdmin = isAdmin;
+        
         fetch(scriptUrl, {
             method: 'POST',
             headers: {
