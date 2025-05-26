@@ -32,7 +32,7 @@
                    pattern="[A-Za-z\s\-']+" 
                    title="Please enter a valid name with letters, spaces, hyphens or apostrophes">
             
-            <button type="submit">Submit Request</button>
+            <button type="submit" id="submit-request-btn">Submit Request</button>
         </form>
         
         <div class="auth-links">
@@ -42,7 +42,7 @@
     
     <script src="auth.js"></script>
     <script>
-        // Set CSRF token when page loads
+        // Set CSRF token and handle form submission directly here
         document.addEventListener('DOMContentLoaded', function() {
             // Clear access verification flag since we're on the request page
             sessionStorage.removeItem('access_verified');
@@ -59,13 +59,9 @@
                 }
             }
             
-            // Check if user is already whitelisted
-            checkIfAlreadyWhitelisted();
-            
-            // Get token from session storage or generate a new one
+            // Generate CSRF token
             let csrfToken = sessionStorage.getItem('csrf_token');
             if (!csrfToken) {
-                // Simple CSRF token generation
                 const array = new Uint8Array(16);
                 window.crypto.getRandomValues(array);
                 csrfToken = Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
@@ -74,60 +70,306 @@
             
             // Set token in form
             document.getElementById('csrf_token').value = csrfToken;
-        });
-        
-        // Function to check if user is already whitelisted
-        function checkIfAlreadyWhitelisted() {
-            // Get the user's IP address
+            
+            // Get user's IP first
             fetch('https://api.ipify.org?format=json')
                 .then(response => response.json())
                 .then(data => {
                     const ipAddress = data.ip;
                     
-                    // Function to check if IP is valid
-                    function isValidIPAddress(ip) {
-                        if (!ip || typeof ip !== 'string') return false;
-                        const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-                        return ipv4Pattern.test(ip);
-                    }
-                    
-                    // If the IP is not valid, don't proceed with checking
-                    if (!isValidIPAddress(ipAddress)) {
-                        return;
-                    }
+                    // Set IP in display
+                    document.getElementById('user-ip').textContent = ipAddress;
                     
                     // Check if IP is already whitelisted
-                    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-                    const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+                    checkIfAlreadyWhitelisted(ipAddress);
                     
-                    if (isWhitelisted) {
-                        console.log("IP already whitelisted, redirecting to index.html");
-                        // Set access verified flag to prevent redirect loops
-                        sessionStorage.setItem('access_verified', 'true');
-                        sessionStorage.setItem('access_timestamp', new Date().getTime());
-                        
-                        // Get user name for display
-                        const userEntry = whitelist.find(entry => entry.ip === ipAddress);
-                        if (userEntry) {
-                            sessionStorage.setItem('user_name', userEntry.name);
-                        }
-                        
-                        // Show message and redirect after a short delay
-                        const messageElement = document.getElementById('request-message');
-                        if (messageElement) {
-                            messageElement.textContent = "Your device is already approved. Redirecting to scanner...";
-                            messageElement.className = "auth-message success";
-                            messageElement.style.display = "block";
-                        }
-                        
-                        setTimeout(() => {
-                            window.location.href = 'index.html';
-                        }, 1500);
+                    // Check for pending request
+                    checkForPendingRequests(ipAddress);
+                    
+                    // Add direct form submission handler
+                    const requestForm = document.getElementById('request-form');
+                    const submitBtn = document.getElementById('submit-request-btn');
+                    
+                    if (requestForm) {
+                        requestForm.addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            console.log("Form submit event triggered");
+                            
+                            const name = document.getElementById('request-name').value;
+                            
+                            // Call the submitAccessRequest function directly
+                            submitAccessRequestLocal(name, ipAddress);
+                        });
+                    }
+                    
+                    // Also add click handler for the button as a backup
+                    if (submitBtn) {
+                        submitBtn.addEventListener('click', function(e) {
+                            // The form's submit event should handle this, but just in case:
+                            if (!requestForm.checkValidity()) {
+                                // If the form is invalid, just let the browser handle validation
+                                return;
+                            }
+                            
+                            e.preventDefault();
+                            console.log("Button click event triggered");
+                            
+                            const name = document.getElementById('request-name').value;
+                            submitAccessRequestLocal(name, ipAddress);
+                        });
                     }
                 })
                 .catch(error => {
-                    console.error("Error checking IP whitelist status:", error);
+                    console.error("Error fetching IP address:", error);
+                    document.getElementById('user-ip').textContent = "Error";
                 });
+        });
+        
+        // Local implementation of submitAccessRequest
+        function submitAccessRequestLocal(name, ipAddress) {
+            console.log("Submitting access request for:", name, ipAddress);
+            
+            // Input validation
+            if (!name || typeof name !== 'string' || name.trim() === '') {
+                showMessageLocal('request-message', 'Please enter a valid name', 'error');
+                return false;
+            }
+            
+            // CSRF validation
+            const csrfToken = sessionStorage.getItem('csrf_token');
+            const formToken = document.getElementById('csrf_token').value;
+            
+            if (!csrfToken || csrfToken !== formToken) {
+                showMessageLocal('request-message', 'Security verification failed. Please refresh the page and try again.', 'error');
+                return false;
+            }
+            
+            // IP validation
+            if (!isValidIPAddressLocal(ipAddress)) {
+                showMessageLocal('request-message', 'Invalid IP address format', 'error');
+                return false;
+            }
+            
+            try {
+                // Check if already whitelisted
+                const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+                const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+                
+                if (isWhitelisted) {
+                    showMessageLocal('request-message', 'Your device is already approved for access', 'success');
+                    
+                    // Redirect to index page after a short delay
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 2000);
+                    return true;
+                }
+                
+                // Check for existing request
+                const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+                const existingRequest = requests.find(r => r.ip === ipAddress);
+                
+                if (existingRequest) {
+                    showMessageLocal('request-message', `An access request is already pending for this device under the name: ${sanitizeInputLocal(existingRequest.name)}`, 'error');
+                    return false;
+                }
+                
+                // Add new request
+                requests.push({
+                    name: sanitizeInputLocal(name),
+                    ip: ipAddress,
+                    requestDate: new Date().toISOString()
+                });
+                
+                localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
+                
+                // Show success message
+                showMessageLocal('request-message', 'Your access request has been submitted. Please wait for admin approval.', 'success');
+                
+                // Update UI to show pending state
+                const statusElement = document.getElementById('request-status');
+                if (statusElement) {
+                    const requestDate = new Date();
+                    const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+                    
+                    // Use DOM methods instead of innerHTML
+                    statusElement.textContent = '';
+                    
+                    const pendingDiv = document.createElement('div');
+                    pendingDiv.className = 'pending-request';
+                    
+                    const datePara = document.createElement('p');
+                    datePara.textContent = `Your request was submitted on ${formattedDate}`;
+                    
+                    const waitPara = document.createElement('p');
+                    waitPara.textContent = 'Please wait for an administrator to review your request.';
+                    
+                    pendingDiv.appendChild(datePara);
+                    pendingDiv.appendChild(waitPara);
+                    statusElement.appendChild(pendingDiv);
+                    
+                    statusElement.style.display = 'block';
+                }
+                
+                // Disable the form
+                const requestForm = document.getElementById('request-form');
+                if (requestForm) {
+                    requestForm.reset();
+                    const submitButton = requestForm.querySelector('button[type="submit"]');
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Request Pending';
+                        submitButton.classList.add('disabled-button');
+                    }
+                    
+                    const nameInput = document.getElementById('request-name');
+                    if (nameInput) {
+                        nameInput.disabled = true;
+                    }
+                }
+                
+                console.log("Access request submitted successfully");
+                return true;
+                
+            } catch (error) {
+                console.error("Error submitting access request:", error);
+                showMessageLocal('request-message', 'An error occurred while submitting your request. Please try again.', 'error');
+                return false;
+            }
+        }
+
+        // Helper function for sanitizing input
+        function sanitizeInputLocal(input) {
+            if (typeof input !== 'string') return '';
+            return input.replace(/[<>&"']/g, function(c) {
+                return {
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '&': '&amp;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[c];
+            });
+        }
+
+        // Helper function to validate IP address
+        function isValidIPAddressLocal(ip) {
+            if (!ip || typeof ip !== 'string') return false;
+            const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            return ipv4Pattern.test(ip);
+        }
+
+        // Helper to show messages
+        function showMessageLocal(elementId, message, type) {
+            console.log("Showing message:", message, type);
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+                element.className = `auth-message ${type}`;
+                element.style.display = 'block';
+                
+                if (type === 'success' || type === 'info') {
+                    setTimeout(() => {
+                        element.style.display = 'none';
+                    }, 5000);
+                }
+            }
+        }
+        
+        // Function to check if already whitelisted
+        function checkIfAlreadyWhitelisted(ipAddress) {
+            // Check if IP is already whitelisted
+            const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+            const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+            
+            if (isWhitelisted) {
+                console.log("IP already whitelisted, redirecting to index.html");
+                // Set access verified flag to prevent redirect loops
+                sessionStorage.setItem('access_verified', 'true');
+                sessionStorage.setItem('access_timestamp', new Date().getTime());
+                
+                // Get user name for display
+                const userEntry = whitelist.find(entry => entry.ip === ipAddress);
+                if (userEntry) {
+                    sessionStorage.setItem('user_name', userEntry.name);
+                }
+                
+                // Show message and redirect after a short delay
+                const messageElement = document.getElementById('request-message');
+                if (messageElement) {
+                    messageElement.textContent = "Your device is already approved. Redirecting to scanner...";
+                    messageElement.className = "auth-message success";
+                    messageElement.style.display = "block";
+                }
+                
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1500);
+            }
+        }
+        
+        // Function to check for pending requests
+        function checkForPendingRequests(ipAddress) {
+            if (!isValidIPAddressLocal(ipAddress)) {
+                showMessageLocal('request-message', 'Invalid IP address format', 'error');
+                return false;
+            }
+            
+            const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+            const existingRequest = requests.find(r => r.ip === ipAddress);
+            
+            if (existingRequest) {
+                // Show pending request message
+                showMessageLocal('request-message', `You already have a pending access request as ${sanitizeInputLocal(existingRequest.name)}`, 'warning');
+                
+                // Format the date for display
+                const requestDate = new Date(existingRequest.requestDate);
+                const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+                
+                // Show status info
+                const statusElement = document.getElementById('request-status');
+                if (statusElement) {
+                    // Use DOM methods instead of innerHTML
+                    statusElement.textContent = '';
+                    
+                    const pendingDiv = document.createElement('div');
+                    pendingDiv.className = 'pending-request';
+                    
+                    const datePara = document.createElement('p');
+                    datePara.textContent = `Your request was submitted on ${formattedDate}`;
+                    
+                    const waitPara = document.createElement('p');
+                    waitPara.textContent = 'Please wait for an administrator to review your request.';
+                    
+                    pendingDiv.appendChild(datePara);
+                    pendingDiv.appendChild(waitPara);
+                    statusElement.appendChild(pendingDiv);
+                    
+                    statusElement.style.display = 'block';
+                }
+                
+                // Disable the form
+                const requestForm = document.getElementById('request-form');
+                if (requestForm) {
+                    const submitButton = requestForm.querySelector('button[type="submit"]');
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Request Pending';
+                        submitButton.classList.add('disabled-button');
+                    }
+                    
+                    // Prefill and disable name field
+                    const nameInput = document.getElementById('request-name');
+                    if (nameInput) {
+                        nameInput.value = existingRequest.name;
+                        nameInput.disabled = true;
+                    }
+                }
+                
+                return true;
+            }
+            
+            return false;
         }
     </script>
 </body>
