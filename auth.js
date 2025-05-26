@@ -826,7 +826,7 @@ function removeIPFromWhitelist(ip) {
         sessionStorage.removeItem('ip_whitelist_status');
         
         // Add to access log
-        logAccessAction(`IP ${ip} (${removedUser.name || 'Unknown user'}) was removed from whitelist`);
+        logAccessAction(` IP ${ip} (${removedUser.name || 'Unknown user'}) was removed from whitelist`);
         
         // Refresh list
         loadWhitelistedIPs();
