@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' https://*.googleusercontent.com data:; connect-src 'self' https://api.ipify.org;">
     <script>
         // Check if user is authenticated as admin before showing content
         document.addEventListener('DOMContentLoaded', function() {
@@ -58,12 +60,21 @@
             </div>
         </div>
         
-        <!-- Add IP Modal -->
+        <!-- Add IP Modal with improved validation -->
         <dialog id="add-ip-modal">
             <h3>Add New IP Address</h3>
             <form id="add-ip-form" class="auth-form">
-                <input type="text" id="new-ip-name" placeholder="User Name" required>
-                <input type="text" id="new-ip-address" placeholder="IP Address (e.g. 192.168.1.1)" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                <!-- Add CSRF token -->
+                <input type="hidden" id="add_ip_csrf_token" name="csrf_token">
+                
+                <input type="text" id="new-ip-name" placeholder="User Name" required 
+                       minlength="2" maxlength="50" 
+                       pattern="[A-Za-z\s\-']+" 
+                       title="Please enter a valid name with letters, spaces, hyphens or apostrophes">
+               
+                <input type="text" id="new-ip-address" placeholder="IP Address (e.g. 192.168.1.1)" required 
+                       pattern="^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                       title="Please enter a valid IPv4 address (e.g. 192.168.1.1)">
                 <div>
                     <button type="submit" class="admin-btn approve">Add IP</button>
                     <button type="button" id="cancel-add-ip" class="admin-btn reject">Cancel</button>
@@ -79,11 +90,34 @@
             if (currentAdmin) {
                 const profileDiv = document.getElementById('admin-profile');
                 if (profileDiv) {
-                    profileDiv.innerHTML = `
-                        <img src="${currentAdmin.picture}" alt="${currentAdmin.name}" class="admin-avatar">
-                        <span class="admin-name">${currentAdmin.name}</span>
-                    `;
+                    // Use safe DOM methods instead of innerHTML
+                    profileDiv.textContent = '';
+                    
+                    const img = document.createElement('img');
+                    img.src = currentAdmin.picture;
+                    img.alt = currentAdmin.name;
+                    img.className = 'admin-avatar';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'admin-name';
+                    nameSpan.textContent = currentAdmin.name;
+                    
+                    profileDiv.appendChild(img);
+                    profileDiv.appendChild(nameSpan);
                 }
+            }
+            
+            // Set CSRF token for Add IP form
+            const csrfToken = sessionStorage.getItem('csrf_token');
+            if (csrfToken) {
+                document.getElementById('add_ip_csrf_token').value = csrfToken;
+            } else {
+                // Generate a new token if none exists
+                const array = new Uint8Array(16);
+                window.crypto.getRandomValues(array);
+                const newToken = Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
+                sessionStorage.setItem('csrf_token', newToken);
+                document.getElementById('add_ip_csrf_token').value = newToken;
             }
         });
     </script>

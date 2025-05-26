@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add Content Security Policy with exception for Google Sign-In -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.googleusercontent.com data:; frame-src https://accounts.google.com/; connect-src 'self' https://api.ipify.org https://accounts.google.com/">
+    
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -14,7 +17,7 @@
         
         <div id="login-message" class="auth-message" style="display: none;"></div>
         
-        <p class="login-info">Unauthorised access.</p>
+        <p class="login-info">Please sign in with your Fixami Google account.</p>
         
         <div class="google-login-container">
             <div id="g_id_onload"

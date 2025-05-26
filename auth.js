@@ -199,19 +199,6 @@ async function getUserIP() {
 
 // Initialize the authentication system
 function initializeAuthSystem() {
-    // Check if admin exists in localStorage
-    let admins = JSON.parse(localStorage.getItem('qrscan_admins'));
-    
-    // If no admins, create default admin
-    if (!admins || admins.length === 0) {
-        admins = [{
-            name: 'Admin',
-            email: 'admin@example.com',
-            password: 'admin123'
-        }];
-        localStorage.setItem('qrscan_admins', JSON.stringify(admins));
-    }
-    
     // Check if IP whitelist array exists
     if (!localStorage.getItem('qrscan_ip_whitelist')) {
         localStorage.setItem('qrscan_ip_whitelist', JSON.stringify([]));
@@ -221,6 +208,19 @@ function initializeAuthSystem() {
     if (!localStorage.getItem('qrscan_access_requests')) {
         localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
     }
+    
+    // Generate CSRF token if not exists
+    if (!sessionStorage.getItem('csrf_token')) {
+        const token = generateCSRFToken();
+        sessionStorage.setItem('csrf_token', token);
+    }
+}
+
+// Generate CSRF token for form submissions
+function generateCSRFToken() {
+    const array = new Uint8Array(16);
+    window.crypto.getRandomValues(array);
+    return Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
 }
 
 // Check if a user is admin and currently logged in
@@ -235,20 +235,54 @@ function isAdminLoggedIn() {
     return currentAdmin.hd === 'fixami.com';
 }
 
-// Check if IP is in the whitelist
+// Check if IP is in the whitelist - added sanitization
 function isIPWhitelisted(ipAddress) {
+    // Sanitize IP input
+    if (!isValidIPAddress(ipAddress)) {
+        return false;
+    }
+    
     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
     return whitelist.some(entry => entry.ip === ipAddress && entry.approved);
 }
 
+// Validate IP address format
+function isValidIPAddress(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    
+    // IPv4 regex pattern
+    const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipv4Pattern.test(ip);
+}
+
+// Sanitize input to prevent XSS
+function sanitizeInput(input) {
+    if (typeof input !== 'string') return '';
+    return input.replace(/[<>&"']/g, function(c) {
+        return {
+            '<': '&lt;',
+            '>': '&gt;',
+            '&': '&amp;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[c];
+    });
+}
+
 // Check for pending requests for this IP
 function checkForPendingRequests(ipAddress) {
+    // Validate IP
+    if (!isValidIPAddress(ipAddress)) {
+        showMessage('request-message', 'Invalid IP address format', 'error');
+        return false;
+    }
+    
     const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
     const existingRequest = requests.find(r => r.ip === ipAddress);
     
     if (existingRequest) {
         // Show pending request message
-        showMessage('request-message', `You already have a pending access request as ${existingRequest.name}`, 'warning');
+        showMessage('request-message', `You already have a pending access request as ${sanitizeInput(existingRequest.name)}`, 'warning');
         
         // Format the date for display
         const requestDate = new Date(existingRequest.requestDate);
@@ -257,12 +291,22 @@ function checkForPendingRequests(ipAddress) {
         // Show status info
         const statusElement = document.getElementById('request-status');
         if (statusElement) {
-            statusElement.innerHTML = `
-                <div class="pending-request">
-                    <p>Your request was submitted on ${formattedDate}</p>
-                    <p>Please wait for an administrator to review your request.</p>
-                </div>
-            `;
+            // Use DOM methods instead of innerHTML
+            statusElement.textContent = '';
+            
+            const pendingDiv = document.createElement('div');
+            pendingDiv.className = 'pending-request';
+            
+            const datePara = document.createElement('p');
+            datePara.textContent = `Your request was submitted on ${formattedDate}`;
+            
+            const waitPara = document.createElement('p');
+            waitPara.textContent = 'Please wait for an administrator to review your request.';
+            
+            pendingDiv.appendChild(datePara);
+            pendingDiv.appendChild(waitPara);
+            statusElement.appendChild(pendingDiv);
+            
             statusElement.style.display = 'block';
         }
         
@@ -292,12 +336,32 @@ function checkForPendingRequests(ipAddress) {
 
 // Submit access request with name and IP
 function submitAccessRequest(name, ipAddress) {
+    // Input validation
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+        showMessage('request-message', 'Please enter a valid name', 'error');
+        return false;
+    }
+    
+    if (!isValidIPAddress(ipAddress)) {
+        showMessage('request-message', 'Invalid IP address format', 'error');
+        return false;
+    }
+    
+    // CSRF protection
+    const csrfToken = sessionStorage.getItem('csrf_token');
+    const formToken = document.getElementById('csrf_token')?.value;
+    
+    if (!csrfToken || csrfToken !== formToken) {
+        showMessage('request-message', 'Security verification failed. Please refresh the page and try again.', 'error');
+        return false;
+    }
+    
     const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
     
     // Check if request already exists for this IP
     const existingRequest = requests.find(r => r.ip === ipAddress);
     if (existingRequest) {
-        showMessage('request-message', `An access request is already pending for this device under the name: ${existingRequest.name}`, 'error');
+        showMessage('request-message', `An access request is already pending for this device under the name: ${sanitizeInput(existingRequest.name)}`, 'error');
         
         // Show a "check status" message with timestamp
         const requestDate = new Date(existingRequest.requestDate);
@@ -305,12 +369,22 @@ function submitAccessRequest(name, ipAddress) {
         
         const statusElement = document.getElementById('request-status');
         if (statusElement) {
-            statusElement.innerHTML = `
-                <div class="pending-request">
-                    <p>You already have a pending request submitted on ${formattedDate}</p>
-                    <p>Please wait for an administrator to review your request.</p>
-                </div>
-            `;
+            // Use DOM methods instead of innerHTML
+            statusElement.textContent = '';
+            
+            const pendingDiv = document.createElement('div');
+            pendingDiv.className = 'pending-request';
+            
+            const datePara = document.createElement('p');
+            datePara.textContent = `You already have a pending request submitted on ${formattedDate}`;
+            
+            const waitPara = document.createElement('p');
+            waitPara.textContent = 'Please wait for an administrator to review your request.';
+            
+            pendingDiv.appendChild(datePara);
+            pendingDiv.appendChild(waitPara);
+            statusElement.appendChild(pendingDiv);
+            
             statusElement.style.display = 'block';
         }
         
@@ -343,9 +417,9 @@ function submitAccessRequest(name, ipAddress) {
         return true;
     }
     
-    // Add new request
+    // Add new request - sanitize name input
     requests.push({
-        name: name,
+        name: sanitizeInput(name),
         ip: ipAddress,
         requestDate: new Date().toISOString()
     });
@@ -358,12 +432,22 @@ function submitAccessRequest(name, ipAddress) {
         const requestDate = new Date();
         const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
         
-        statusElement.innerHTML = `
-            <div class="pending-request">
-                <p>Your request was submitted on ${formattedDate}</p>
-                <p>Please wait for an administrator to review your request.</p>
-            </div>
-        `;
+        // Use DOM methods instead of innerHTML
+        statusElement.textContent = '';
+        
+        const pendingDiv = document.createElement('div');
+        pendingDiv.className = 'pending-request';
+        
+        const datePara = document.createElement('p');
+        datePara.textContent = `Your request was submitted on ${formattedDate}`;
+        
+        const waitPara = document.createElement('p');
+        waitPara.textContent = 'Please wait for an administrator to review your request.';
+        
+        pendingDiv.appendChild(datePara);
+        pendingDiv.appendChild(waitPara);
+        statusElement.appendChild(pendingDiv);
+        
         statusElement.style.display = 'block';
     }
     
@@ -393,15 +477,23 @@ function loadAccessRequests() {
     const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
     
     // Clear current list
-    requestList.innerHTML = '';
+    requestList.textContent = '';
     
     if (requests.length === 0) {
-        requestList.innerHTML = '<p class="no-items-message">No pending access requests.</p>';
+        const noItemsMsg = document.createElement('p');
+        noItemsMsg.className = 'no-items-message';
+        noItemsMsg.textContent = 'No pending access requests.';
+        requestList.appendChild(noItemsMsg);
         return;
     }
     
     // Add each request to the list
     requests.forEach(request => {
+        // Validate the request data
+        if (!request.ip || !isValidIPAddress(request.ip)) {
+            return; // Skip invalid entries
+        }
+        
         const requestItem = document.createElement('div');
         requestItem.className = 'request-item';
         
@@ -409,17 +501,46 @@ function loadAccessRequests() {
         const requestDate = new Date(request.requestDate);
         const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
         
-        requestItem.innerHTML = `
-            <div class="request-info">
-                <p><strong>${request.name}</strong></p>
-                <p>IP Address: ${request.ip}</p>
-                <p>Requested: ${formattedDate}</p>
-            </div>
-            <div class="request-actions">
-                <button class="admin-btn approve" data-ip="${request.ip}" data-name="${request.name}">Approve</button>
-                <button class="admin-btn reject" data-ip="${request.ip}">Reject</button>
-            </div>
-        `;
+        // Create request info section
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'request-info';
+        
+        const nameP = document.createElement('p');
+        const nameStrong = document.createElement('strong');
+        nameStrong.textContent = sanitizeInput(request.name);
+        nameP.appendChild(nameStrong);
+        
+        const ipP = document.createElement('p');
+        ipP.textContent = `IP Address: ${sanitizeInput(request.ip)}`;
+        
+        const dateP = document.createElement('p');
+        dateP.textContent = `Requested: ${formattedDate}`;
+        
+        infoDiv.appendChild(nameP);
+        infoDiv.appendChild(ipP);
+        infoDiv.appendChild(dateP);
+        
+        // Create actions section
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'request-actions';
+        
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'admin-btn approve';
+        approveBtn.textContent = 'Approve';
+        approveBtn.dataset.ip = request.ip;
+        approveBtn.dataset.name = request.name;
+        
+        const rejectBtn = document.createElement('button');
+        rejectBtn.className = 'admin-btn reject';
+        rejectBtn.textContent = 'Reject';
+        rejectBtn.dataset.ip = request.ip;
+        
+        actionsDiv.appendChild(approveBtn);
+        actionsDiv.appendChild(rejectBtn);
+        
+        // Add to request item
+        requestItem.appendChild(infoDiv);
+        requestItem.appendChild(actionsDiv);
         
         requestList.appendChild(requestItem);
     });
@@ -447,15 +568,23 @@ function loadWhitelistedIPs() {
     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
     
     // Clear current list
-    ipList.innerHTML = '';
+    ipList.textContent = '';
     
     if (whitelist.length === 0) {
-        ipList.innerHTML = '<p class="no-items-message">No whitelisted IP addresses.</p>';
+        const noItemsMsg = document.createElement('p');
+        noItemsMsg.className = 'no-items-message';
+        noItemsMsg.textContent = 'No whitelisted IP addresses.';
+        ipList.appendChild(noItemsMsg);
         return;
     }
     
     // Add each IP to the list
     whitelist.forEach(entry => {
+        // Validate the IP
+        if (!entry.ip || !isValidIPAddress(entry.ip)) {
+            return; // Skip invalid entries
+        }
+        
         const ipItem = document.createElement('div');
         ipItem.className = 'user-item';
         
@@ -463,17 +592,43 @@ function loadWhitelistedIPs() {
         const addedDate = new Date(entry.addedDate);
         const formattedDate = addedDate.toLocaleDateString() + ' ' + addedDate.toLocaleTimeString();
         
-        ipItem.innerHTML = `
-            <div class="user-info">
-                <p><strong>${entry.name}</strong></p>
-                <p>IP Address: ${entry.ip}</p>
-                <p>Added: ${formattedDate}</p>
-                <p>Added by: ${entry.addedBy}</p>
-            </div>
-            <div class="user-actions">
-                <button class="admin-btn delete" data-ip="${entry.ip}">Remove</button>
-            </div>
-        `;
+        // Create user info section
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'user-info';
+        
+        const nameP = document.createElement('p');
+        const nameStrong = document.createElement('strong');
+        nameStrong.textContent = sanitizeInput(entry.name);
+        nameP.appendChild(nameStrong);
+        
+        const ipP = document.createElement('p');
+        ipP.textContent = `IP Address: ${sanitizeInput(entry.ip)}`;
+        
+        const dateP = document.createElement('p');
+        dateP.textContent = `Added: ${formattedDate}`;
+        
+        const addedByP = document.createElement('p');
+        addedByP.textContent = `Added by: ${sanitizeInput(entry.addedBy)}`;
+        
+        infoDiv.appendChild(nameP);
+        infoDiv.appendChild(ipP);
+        infoDiv.appendChild(dateP);
+        infoDiv.appendChild(addedByP);
+        
+        // Create actions section
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'user-actions';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'admin-btn delete';
+        deleteBtn.textContent = 'Remove';
+        deleteBtn.dataset.ip = entry.ip;
+        
+        actionsDiv.appendChild(deleteBtn);
+        
+        // Add to IP item
+        ipItem.appendChild(infoDiv);
+        ipItem.appendChild(actionsDiv);
         
         ipList.appendChild(ipItem);
     });
@@ -587,8 +742,8 @@ function removeIPFromWhitelist(ip) {
 function showMessage(elementId, message, type) {
     const element = document.getElementById(elementId);
     if (element) {
-        element.textContent = message;
-        element.className = `auth-message ${type}`;
+        element.textContent = sanitizeInput(message);
+        element.className = `auth-message ${sanitizeInput(type)}`;
         element.style.display = 'block';
         
         // Hide message after 5 seconds for success/info messages

@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Access - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.ipify.org;">
 </head>
 <body>
     <div class="auth-container">
@@ -21,7 +23,15 @@
         <div id="request-status" class="request-status" style="display: none;"></div>
         
         <form class="auth-form" id="request-form">
-            <input type="text" id="request-name" placeholder="Your Name" required>
+            <!-- Add CSRF token -->
+            <input type="hidden" id="csrf_token" name="csrf_token">
+            
+            <!-- Add pattern validation -->
+            <input type="text" id="request-name" placeholder="Your Name" 
+                   required minlength="2" maxlength="50" 
+                   pattern="[A-Za-z\s\-']+" 
+                   title="Please enter a valid name with letters, spaces, hyphens or apostrophes">
+            
             <button type="submit">Submit Request</button>
         </form>
         
@@ -31,5 +41,22 @@
     </div>
     
     <script src="auth.js"></script>
+    <script>
+        // Set CSRF token when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get token from session storage or generate a new one
+            let csrfToken = sessionStorage.getItem('csrf_token');
+            if (!csrfToken) {
+                // Simple CSRF token generation
+                const array = new Uint8Array(16);
+                window.crypto.getRandomValues(array);
+                csrfToken = Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
+                sessionStorage.setItem('csrf_token', csrfToken);
+            }
+            
+            // Set token in form
+            document.getElementById('csrf_token').value = csrfToken;
+        });
+    </script>
 </body>
 </html>
