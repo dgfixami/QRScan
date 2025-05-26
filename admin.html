@@ -5,35 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Add CSP header -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://unpkg.com https://script.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://api.ipify.org https://script.google.com">
-    <!-- Add security script -->
-    <script src="security.js"></script>
     <script>
         // Check if user is authenticated as admin before showing content
         document.addEventListener('DOMContentLoaded', function() {
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
             
-            // Enhanced security check - verify both domain and email format
-            if (!currentAdmin || 
-                currentAdmin.hd !== 'fixami.com' || 
-                !currentAdmin.email || 
-                !currentAdmin.email.endsWith('@fixami.com')) {
-                // Redirect to login page if not authenticated properly
+            // If admin data exists, verify domain using hd property
+            if (!currentAdmin || currentAdmin.hd !== 'fixami.com') {
+                // Redirect to login page if not from fixami.com domain
                 window.location.href = 'login.html';
             }
-            
-            // Add CSRF token to all forms
-            document.querySelectorAll('form').forEach(form => {
-                const csrfToken = localStorage.getItem('qrscan_csrf_token');
-                if (csrfToken) {
-                    const tokenInput = document.createElement('input');
-                    tokenInput.type = 'hidden';
-                    tokenInput.name = 'csrf';
-                    tokenInput.value = csrfToken;
-                    form.appendChild(tokenInput);
-                }
-            });
         });
     </script>
 </head>
@@ -63,7 +44,7 @@
                 <p>Review access requests from users. Each request is linked to a specific IP address.</p>
             </div>
             <div id="request-list">
-                <!-- Request items will be added here dynamically using DOM methods -->
+                <!-- Request items will be added here dynamically -->
                 <p class="no-items-message">No pending access requests.</p>
             </div>
         </div>
@@ -72,22 +53,17 @@
             <h2>IP Whitelist</h2>
             <button id="add-ip-btn" class="admin-btn edit">Add New IP</button>
             <div id="ip-list">
-                <!-- IP items will be added here dynamically using DOM methods -->
+                <!-- IP items will be added here dynamically -->
                 <p class="no-items-message">No whitelisted IP addresses.</p>
             </div>
         </div>
         
-        <!-- Add IP Modal - with CSRF protection and input validation -->
+        <!-- Add IP Modal -->
         <dialog id="add-ip-modal">
             <h3>Add New IP Address</h3>
             <form id="add-ip-form" class="auth-form">
-                <!-- CSRF token will be added by JavaScript -->
-                <input type="text" id="new-ip-name" placeholder="User Name" required 
-                       pattern="[A-Za-z0-9 ._-]{3,50}" 
-                       title="Name must be 3-50 characters and contain only letters, numbers, spaces and ._-">
-                <input type="text" id="new-ip-address" placeholder="IP Address (e.g. 192.168.1.1)" required 
-                       pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-                       title="Please enter a valid IPv4 address">
+                <input type="text" id="new-ip-name" placeholder="User Name" required>
+                <input type="text" id="new-ip-address" placeholder="IP Address (e.g. 192.168.1.1)" required pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
                 <div>
                     <button type="submit" class="admin-btn approve">Add IP</button>
                     <button type="button" id="cancel-add-ip" class="admin-btn reject">Cancel</button>
@@ -97,35 +73,21 @@
     </div>
     
     <script>
-        // Display admin info using DOM methods instead of innerHTML
+        // Display admin info
         document.addEventListener('DOMContentLoaded', function() {
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
             if (currentAdmin) {
                 const profileDiv = document.getElementById('admin-profile');
                 if (profileDiv) {
-                    // Clear any existing content
-                    profileDiv.innerHTML = '';
-                    
-                    // Create and append avatar image
-                    const avatarImg = document.createElement('img');
-                    avatarImg.src = currentAdmin.picture;
-                    avatarImg.alt = currentAdmin.name;
-                    avatarImg.className = 'admin-avatar';
-                    
-                    // Create and append name span
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'admin-name';
-                    nameSpan.textContent = currentAdmin.name;
-                    
-                    // Append to profile div
-                    profileDiv.appendChild(avatarImg);
-                    profileDiv.appendChild(nameSpan);
+                    profileDiv.innerHTML = `
+                        <img src="${currentAdmin.picture}" alt="${currentAdmin.name}" class="admin-avatar">
+                        <span class="admin-name">${currentAdmin.name}</span>
+                    `;
                 }
             }
         });
     </script>
     
-    <script src="security.js"></script>
     <script src="auth.js"></script>
 </body>
 </html>
