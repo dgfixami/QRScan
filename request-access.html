@@ -177,7 +177,7 @@
                 // Set session storage for scanner access
                 sessionStorage.setItem('access_verified', 'true');
                 sessionStorage.setItem('access_timestamp', new Date().getTime());
-                sessionStorage.setItem('user_name', entry.name || 'User');
+                sessionStorage.setItem('user_name', entry.name || '');
                 
                 // Show approved message and redirect
                 showMessage("Your device is already approved. Redirecting to scanner...", 'success');
