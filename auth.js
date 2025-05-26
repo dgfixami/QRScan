@@ -265,15 +265,43 @@ function isAdminLoggedIn() {
     return isAdmin;
 }
 
-// Check if IP is in the whitelist - added sanitization
+// Check if IP is in the whitelist - added sanitization and improved caching with revocation check
 function isIPWhitelisted(ipAddress) {
     // Sanitize IP input
     if (!isValidIPAddress(ipAddress)) {
         return false;
     }
     
+    // Check if we have a cached result
+    const cachedResult = sessionStorage.getItem('ip_whitelist_status');
+    if (cachedResult) {
+        try {
+            const parsed = JSON.parse(cachedResult);
+            if (parsed.ip === ipAddress && parsed.timestamp) {
+                // Only use cache for a short time (10 seconds) to ensure revocations are detected quickly
+                const now = new Date().getTime();
+                const cacheTime = parseInt(parsed.timestamp);
+                if (now - cacheTime < 10000) { // 10 seconds
+                    return parsed.isWhitelisted;
+                }
+            }
+        } catch (e) {
+            console.error("Cache parse error:", e);
+        }
+    }
+    
+    // Check whitelist in localStorage
     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-    return whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+    const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+    
+    // Cache the result for improved performance
+    sessionStorage.setItem('ip_whitelist_status', JSON.stringify({
+        ip: ipAddress,
+        isWhitelisted: isWhitelisted,
+        timestamp: new Date().getTime()
+    }));
+    
+    return isWhitelisted;
 }
 
 // Validate IP address format
@@ -386,10 +414,32 @@ function submitAccessRequest(name, ipAddress) {
         return false;
     }
     
-    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+    // Check if IP is already whitelisted - do this check again to prevent form bypass
+    if (isIPWhitelisted(ipAddress)) {
+        showMessage('request-message', 'Your device is already approved for access', 'success');
+        
+        // Update session storage to ensure access is marked as verified
+        sessionStorage.setItem('access_verified', 'true'); 
+        sessionStorage.setItem('access_timestamp', new Date().getTime());
+        
+        // Get user name for display
+        const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+        const userEntry = whitelist.find(entry => entry.ip === ipAddress);
+        if (userEntry) {
+            sessionStorage.setItem('user_name', userEntry.name);
+        }
+        
+        // Redirect to index page after a short delay
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 1500);
+        return true;
+    }
     
     // Check if request already exists for this IP
+    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
     const existingRequest = requests.find(r => r.ip === ipAddress);
+    
     if (existingRequest) {
         showMessage('request-message', `An access request is already pending for this device under the name: ${sanitizeInput(existingRequest.name)}`, 'error');
         
@@ -436,15 +486,6 @@ function submitAccessRequest(name, ipAddress) {
         }
         
         return false;
-    }
-    
-    // Check if IP is already whitelisted
-    if (isIPWhitelisted(ipAddress)) {
-        showMessage('request-message', 'Your device is already approved for access', 'success');
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 2000);
-        return true;
     }
     
     // Add new request - sanitize name input
@@ -747,7 +788,7 @@ function addIPToWhitelist(entry) {
     return true;
 }
 
-// Remove IP from whitelist
+// Remove IP from whitelist with revocation broadcasting
 function removeIPFromWhitelist(ip) {
     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
     
@@ -756,10 +797,36 @@ function removeIPFromWhitelist(ip) {
     if (entryIndex === -1) return false;
     
     if (confirm(`Are you sure you want to remove this IP address from the whitelist?`)) {
+        // Store the user info before removal for logging
+        const removedUser = whitelist[entryIndex];
+        
+        // Remove the entry
         whitelist.splice(entryIndex, 1);
         
         // Save changes
         localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
+        
+        // Add entry to revocation list with timestamp
+        const revocations = JSON.parse(localStorage.getItem('qrscan_ip_revocations') || '[]');
+        revocations.push({
+            ip: ip,
+            name: removedUser.name || 'Unknown',
+            revokedAt: new Date().toISOString(),
+            revokedBy: getCurrentAdminName()
+        });
+        
+        // Keep only the last 100 revocations to prevent localStorage from growing too large
+        while (revocations.length > 100) {
+            revocations.shift();
+        }
+        
+        localStorage.setItem('qrscan_ip_revocations', JSON.stringify(revocations));
+        
+        // Clear the IP whitelist status cache
+        sessionStorage.removeItem('ip_whitelist_status');
+        
+        // Add to access log
+        logAccessAction(`IP ${ip} (${removedUser.name || 'Unknown user'}) was removed from whitelist`);
         
         // Refresh list
         loadWhitelistedIPs();
@@ -768,19 +835,59 @@ function removeIPFromWhitelist(ip) {
     return true;
 }
 
-// Helper to show messages
-function showMessage(elementId, message, type) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.textContent = sanitizeInput(message);
-        element.className = `auth-message ${sanitizeInput(type)}`;
-        element.style.display = 'block';
+// Helper function to get current admin's name
+function getCurrentAdminName() {
+    const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+    return currentAdmin ? currentAdmin.name : 'Admin';
+}
+
+// Function to log access control actions
+function logAccessAction(action) {
+    const accessLog = JSON.parse(localStorage.getItem('qrscan_access_log') || '[]');
+    
+    accessLog.push({
+        action: action,
+        timestamp: new Date().toISOString(),
+        admin: getCurrentAdminName()
+    });
+    
+    // Keep log size reasonable
+    while (accessLog.length > 500) {
+        accessLog.shift();
+    }
+    
+    localStorage.setItem('qrscan_access_log', JSON.stringify(accessLog));
+}
+
+// Add periodic check for whitelist status to catch revocations
+function periodicWhitelistCheck() {
+    // Only run this check if user is not an admin and has access_verified flag
+    if (sessionStorage.getItem('admin_access') === 'true') {
+        return; // Admins are always allowed
+    }
+    
+    if (sessionStorage.getItem('access_verified') === 'true') {
+        const ipAddress = sessionStorage.getItem('user_ip');
+        if (!ipAddress) return;
         
-        // Hide message after 5 seconds for success/info messages
-        if (type === 'success' || type === 'info') {
-            setTimeout(() => {
-                element.style.display = 'none';
-            }, 5000);
+        // Force a fresh check of the whitelist status (bypass cache)
+        sessionStorage.removeItem('ip_whitelist_status');
+        
+        if (!isIPWhitelisted(ipAddress)) {
+            console.log("Access revoked during periodic check - IP no longer whitelisted");
+            
+            // Clear access verification
+            sessionStorage.removeItem('access_verified');
+            sessionStorage.removeItem('access_timestamp');
+            
+            // Redirect to access request page
+            window.location.href = 'request-access.html?revoked=true';
         }
     }
 }
+
+// Initialize periodic whitelist checks
+document.addEventListener('DOMContentLoaded', function() {
+    // Start periodic whitelist check every 30 seconds
+    setInterval(periodicWhitelistCheck, 30000);
+});

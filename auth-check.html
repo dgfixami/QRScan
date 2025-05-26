@@ -61,6 +61,7 @@
                 console.log("Admin detected, granting access");
                 sessionStorage.setItem('access_verified', 'true');
                 sessionStorage.setItem('admin_access', 'true');
+                sessionStorage.setItem('access_timestamp', new Date().getTime());
                 window.location.href = 'index.html';
                 return;
             }
@@ -83,6 +84,9 @@
                     // Store IP in session
                     sessionStorage.setItem('user_ip', ipAddress);
                     
+                    // Force fresh check by clearing any cached result
+                    sessionStorage.removeItem('ip_whitelist_status');
+                    
                     // Check whitelist in localStorage
                     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
                     const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
@@ -94,12 +98,24 @@
                         sessionStorage.setItem('user_name', userEntry.name);
                         sessionStorage.setItem('access_verified', 'true');
                         sessionStorage.setItem('access_timestamp', new Date().getTime());
+                        
+                        // Add throttle to prevent rapid access checks
+                        sessionStorage.setItem('last_access_check', new Date().getTime());
+                        
                         window.location.href = 'index.html';
                     } else {
                         console.log("IP is not whitelisted, redirecting to request page");
                         // Not whitelisted, redirect to request access
                         sessionStorage.removeItem('access_verified');
-                        window.location.href = 'request-access.html';
+                        sessionStorage.removeItem('access_timestamp');
+                        
+                        // Check if access was previously granted (potential revocation)
+                        const wasVerified = sessionStorage.getItem('was_verified') === 'true';
+                        if (wasVerified) {
+                            window.location.href = 'request-access.html?revoked=true';
+                        } else {
+                            window.location.href = 'request-access.html';
+                        }
                     }
                 } catch (error) {
                     console.error("Error checking access:", error);

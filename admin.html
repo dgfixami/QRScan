@@ -45,6 +45,7 @@
         <div class="admin-tabs">
             <button class="admin-tab active" data-tab="access-requests">Access Requests</button>
             <button class="admin-tab" data-tab="ip-whitelist">IP Whitelist</button>
+            <button class="admin-tab" data-tab="access-log">Access Log</button>
         </div>
         
         <div id="access-requests" class="admin-panel-section active">
@@ -64,6 +65,17 @@
             <div id="ip-list">
                 <!-- IP items will be added here dynamically -->
                 <p class="no-items-message">No whitelisted IP addresses.</p>
+            </div>
+        </div>
+        
+        <div id="access-log" class="admin-panel-section">
+            <h2>Access Control Log</h2>
+            <div class="section-description">
+                <p>History of IP whitelist changes and access control actions.</p>
+            </div>
+            <div id="log-list" class="access-log-container">
+                <!-- Log items will be added here dynamically -->
+                <p class="no-items-message">No log entries yet.</p>
             </div>
         </div>
         
@@ -126,9 +138,126 @@
                 sessionStorage.setItem('csrf_token', newToken);
                 document.getElementById('add_ip_csrf_token').value = newToken;
             }
+            
+            // Load access log if section exists
+            if (document.getElementById('log-list')) {
+                loadAccessLog();
+            }
         });
+        
+        // Function to load access log
+        function loadAccessLog() {
+            const logList = document.getElementById('log-list');
+            if (!logList) return;
+            
+            // Clear existing content
+            logList.innerHTML = '';
+            
+            // Get access log and revocation entries
+            const accessLog = JSON.parse(localStorage.getItem('qrscan_access_log') || '[]');
+            const revocations = JSON.parse(localStorage.getItem('qrscan_ip_revocations') || '[]');
+            
+            // Combine and sort logs by timestamp (newest first)
+            const allLogs = [
+                ...accessLog.map(entry => ({
+                    ...entry,
+                    type: 'action'
+                })),
+                ...revocations.map(entry => ({
+                    action: `IP ${entry.ip} (${entry.name}) was revoked by ${entry.revokedBy}`,
+                    timestamp: entry.revokedAt,
+                    admin: entry.revokedBy,
+                    type: 'revocation'
+                }))
+            ];
+            
+            // Sort by timestamp (newest first)
+            allLogs.sort((a, b) => {
+                return new Date(b.timestamp) - new Date(a.timestamp);
+            });
+            
+            if (allLogs.length === 0) {
+                const noItemsMsg = document.createElement('p');
+                noItemsMsg.className = 'no-items-message';
+                noItemsMsg.textContent = 'No log entries available.';
+                logList.appendChild(noItemsMsg);
+                return;
+            }
+            
+            // Create log entries
+            allLogs.forEach(entry => {
+                const logItem = document.createElement('div');
+                logItem.className = 'log-item';
+                if (entry.type === 'revocation') {
+                    logItem.classList.add('revocation');
+                }
+                
+                // Format date
+                const logDate = new Date(entry.timestamp);
+                const formattedDate = logDate.toLocaleDateString() + ' ' + logDate.toLocaleTimeString();
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'log-time';
+                timeSpan.textContent = formattedDate;
+                
+                const actionSpan = document.createElement('span');
+                actionSpan.className = 'log-action';
+                actionSpan.textContent = entry.action;
+                
+                const adminSpan = document.createElement('span');
+                adminSpan.className = 'log-admin';
+                adminSpan.textContent = 'by ' + entry.admin;
+                
+                logItem.appendChild(timeSpan);
+                logItem.appendChild(actionSpan);
+                logItem.appendChild(adminSpan);
+                
+                logList.appendChild(logItem);
+            });
+        }
     </script>
     
     <script src="auth.js"></script>
+    
+    <style>
+        .access-log-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        
+        .log-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .log-item.revocation {
+            background-color: #fff4e5;
+            border-left: 3px solid #ff9800;
+        }
+        
+        .log-time {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        
+        .log-action {
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+        
+        .log-admin {
+            font-size: 12px;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
 </body>
 </html>

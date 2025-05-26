@@ -46,6 +46,21 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Clear access verification flag since we're on the request page
             sessionStorage.removeItem('access_verified');
+            sessionStorage.removeItem('access_timestamp');
+            
+            // Check for revoked parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('revoked') === 'true') {
+                const messageElement = document.getElementById('request-message');
+                if (messageElement) {
+                    messageElement.textContent = "Your access has been revoked. Please submit a new request if needed.";
+                    messageElement.className = "auth-message warning";
+                    messageElement.style.display = "block";
+                }
+            }
+            
+            // Check if user is already whitelisted
+            checkIfAlreadyWhitelisted();
             
             // Get token from session storage or generate a new one
             let csrfToken = sessionStorage.getItem('csrf_token');
@@ -60,6 +75,60 @@
             // Set token in form
             document.getElementById('csrf_token').value = csrfToken;
         });
+        
+        // Function to check if user is already whitelisted
+        function checkIfAlreadyWhitelisted() {
+            // Get the user's IP address
+            fetch('https://api.ipify.org?format=json')
+                .then(response => response.json())
+                .then(data => {
+                    const ipAddress = data.ip;
+                    
+                    // Function to check if IP is valid
+                    function isValidIPAddress(ip) {
+                        if (!ip || typeof ip !== 'string') return false;
+                        const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+                        return ipv4Pattern.test(ip);
+                    }
+                    
+                    // If the IP is not valid, don't proceed with checking
+                    if (!isValidIPAddress(ipAddress)) {
+                        return;
+                    }
+                    
+                    // Check if IP is already whitelisted
+                    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+                    const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+                    
+                    if (isWhitelisted) {
+                        console.log("IP already whitelisted, redirecting to index.html");
+                        // Set access verified flag to prevent redirect loops
+                        sessionStorage.setItem('access_verified', 'true');
+                        sessionStorage.setItem('access_timestamp', new Date().getTime());
+                        
+                        // Get user name for display
+                        const userEntry = whitelist.find(entry => entry.ip === ipAddress);
+                        if (userEntry) {
+                            sessionStorage.setItem('user_name', userEntry.name);
+                        }
+                        
+                        // Show message and redirect after a short delay
+                        const messageElement = document.getElementById('request-message');
+                        if (messageElement) {
+                            messageElement.textContent = "Your device is already approved. Redirecting to scanner...";
+                            messageElement.className = "auth-message success";
+                            messageElement.style.display = "block";
+                        }
+                        
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 1500);
+                    }
+                })
+                .catch(error => {
+                    console.error("Error checking IP whitelist status:", error);
+                });
+        }
     </script>
 </body>
 </html>
