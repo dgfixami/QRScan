@@ -6,7 +6,49 @@
     <title>Request Access - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
     <!-- Add Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.ipify.org;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.ipify.org;">
+    <style>
+        /* Enhanced styling for pending request display */
+        .pending-request-banner {
+            background-color: #fffde7;
+            border: 2px solid #ffd54f;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .pending-request-banner h3 {
+            color: #f57f17;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        
+        .pending-request-banner p {
+            margin: 5px 0;
+        }
+        
+        .pending-request-banner .date {
+            font-weight: bold;
+            display: block;
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+        
+        .pending-request-banner .name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .wait-message {
+            background-color: #f1f8e9;
+            border-left: 4px solid #8bc34a;
+            padding: 10px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+    </style>
 </head>
 <body>
     <div class="auth-container">
@@ -15,9 +57,8 @@
         
         <div id="request-message" class="auth-message" style="display: none;"></div>
         
-        <!-- <div class="ip-info">
-            <p>Your device will be identified using IP: <span id="user-ip" class="ip-address">Loading...</span></p>
-        </div> -->
+        <!-- Pending request banner will appear here when there's an existing request -->
+        <div id="pending-request-banner" style="display: none;"></div>
         
         <!-- New element to display pending request status -->
         <div id="request-status" class="request-status" style="display: none;"></div>
@@ -68,30 +109,102 @@
                 const data = await response.json();
                 userIP = data.ip;
                 
-                // Display user IP
-                document.getElementById('user-ip').textContent = userIP;
+                // Display user IP (if element exists)
+                const userIpElement = document.getElementById('user-ip');
+                if (userIpElement) {
+                    userIpElement.textContent = userIP;
+                }
                 
-                // Check if IP is already whitelisted
+                // First check if IP is already whitelisted
                 if (isWhitelisted(userIP)) {
                     console.log("IP is already whitelisted");
                     handleWhitelistedIP();
                     return;
                 }
                 
-                // Check if request is already pending
-                if (hasPendingRequest(userIP)) {
-                    console.log("IP has pending request");
-                    handlePendingRequest();
+                // Then immediately check if request is already pending
+                // This is now the primary focus when loading the page
+                if (checkAndDisplayPendingRequest(userIP)) {
+                    console.log("IP has pending request - display shown and form disabled");
+                    // Don't proceed further if there's a pending request
                     return;
                 }
                 
-                console.log("Form ready for submission");
+                console.log("Form ready for submission - no pending request");
                 
             } catch (error) {
                 console.error("Error fetching IP address:", error);
-                document.getElementById('user-ip').textContent = "Error";
+                const userIpElement = document.getElementById('user-ip');
+                if (userIpElement) {
+                    userIpElement.textContent = "Error";
+                }
                 showMessage("Error identifying your device. Please try again later.", 'error');
             }
+        }
+
+        // Enhanced function to check and display pending request - focus on immediate visibility
+        function checkAndDisplayPendingRequest(ipAddress) {
+            // Validate IP
+            if (!isValidIP(ipAddress)) {
+                showMessage('Invalid IP address format', 'error');
+                return false;
+            }
+            
+            const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+            const existingRequest = requests.find(r => r.ip === ipAddress);
+            
+            if (existingRequest) {
+                // Get banner element for prominent display
+                const bannerElement = document.getElementById('pending-request-banner');
+                
+                // Format the date for display
+                const requestDate = new Date(existingRequest.requestDate);
+                const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+                
+                // Calculate time elapsed since request
+                const now = new Date();
+                const timeDiff = Math.floor((now - requestDate) / (1000 * 60)); // minutes
+                let timeElapsed = "";
+                
+                if (timeDiff < 60) {
+                    timeElapsed = `${timeDiff} minute${timeDiff !== 1 ? 's' : ''} ago`;
+                } else if (timeDiff < 1440) { // less than a day
+                    const hours = Math.floor(timeDiff / 60);
+                    timeElapsed = `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+                } else {
+                    const days = Math.floor(timeDiff / 1440);
+                    timeElapsed = `${days} day${days !== 1 ? 's' : ''} ago`;
+                }
+                
+                // Create prominent pending request banner
+                if (bannerElement) {
+                    bannerElement.innerHTML = `
+                        <h3>Your Access Request is Pending</h3>
+                        <p>You already have a pending access request as: 
+                           <span class="name">${sanitizeText(existingRequest.name)}</span></p>
+                        <p><span class="date">Submitted on ${formattedDate}</span></p>
+                        <p>(${timeElapsed})</p>
+                        <div class="wait-message">
+                            <p>Please wait for an administrator to review your request.</p>
+                            <p>You will receive access once your request has been approved.</p>
+                        </div>
+                    `;
+                    bannerElement.style.display = "block";
+                }
+                
+                // Hide the normal form
+                const form = document.getElementById('request-form');
+                if (form) {
+                    form.style.display = 'none';
+                }
+                
+                // Show clear message
+                showMessage(`Your access request as "${sanitizeText(existingRequest.name)}" is pending approval.`, 'info', false);
+                
+                return true;
+            }
+            
+            return false;
         }
         
         // Main form submission function with enhanced security
@@ -333,58 +446,17 @@
             
             return true;
         }
-        
-        // Show pending request status
-        function showPendingRequestStatus(name) {
-            const statusElement = document.getElementById('request-status');
-            if (statusElement) {
-                const requestDate = new Date();
-                const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
-                
-                // Create pending request display
-                statusElement.innerHTML = '';
-                
-                const pendingDiv = document.createElement('div');
-                pendingDiv.className = 'pending-request';
-                
-                const datePara = document.createElement('p');
-                datePara.textContent = `Your request was submitted on ${formattedDate}`;
-                
-                const waitPara = document.createElement('p');
-                waitPara.textContent = 'Please wait for an administrator to review your request.';
-                
-                pendingDiv.appendChild(datePara);
-                pendingDiv.appendChild(waitPara);
-                statusElement.appendChild(pendingDiv);
-                
-                statusElement.style.display = 'block';
-            }
-        }
-        
-        // Disable form after submission
-        function disableForm() {
-            const form = document.getElementById('request-form');
-            if (form) {
-                const nameInput = document.getElementById('request-name');
-                const submitBtn = document.getElementById('submit-btn');
-                
-                nameInput.disabled = true;
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Request Pending';
-                submitBtn.className += ' disabled-button';
-            }
-        }
-        
-        // Show message in UI
-        function showMessage(message, type) {
+
+        // Show message in UI with option to keep message visible
+        function showMessage(message, type, autoHide = true) {
             const messageElement = document.getElementById('request-message');
             if (messageElement) {
                 messageElement.textContent = message;
                 messageElement.className = `auth-message ${type}`;
                 messageElement.style.display = 'block';
                 
-                // Auto-hide success/info messages after a delay
-                if (type === 'success' || type === 'info') {
+                // Auto-hide success/info messages after a delay if autoHide is true
+                if (autoHide && (type === 'success' || type === 'info')) {
                     setTimeout(() => {
                         messageElement.style.display = 'none';
                     }, 5000);
