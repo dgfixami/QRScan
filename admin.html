@@ -11,7 +11,7 @@
         // Check if user is authenticated as admin before showing content
         document.addEventListener('DOMContentLoaded', function() {
             console.log("Admin.html authentication check started");
-            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin') || '{}');
             
             // If admin data exists, verify domain using hd property
             if (!currentAdmin || currentAdmin.hd !== 'fixami.com') {
@@ -23,6 +23,11 @@
                 // Mark as admin and verified in session
                 sessionStorage.setItem('admin_access', 'true');
                 sessionStorage.setItem('access_verified', 'true');
+                
+                // Initialize admin session time if not already set - FIXED
+                if (!sessionStorage.getItem('admin_access_time')) {
+                    sessionStorage.setItem('admin_access_time', new Date().getTime().toString());
+                }
             }
         });
     </script>
@@ -105,69 +110,80 @@
     <script>
         // Display admin info
         document.addEventListener('DOMContentLoaded', function() {
-            // Enhanced admin verification with anti-tampering
-            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin') || '{}');
-            
-            // Verify admin again even after initial verification
-            if (!currentAdmin || !currentAdmin.email || !currentAdmin.hd || currentAdmin.hd !== 'fixami.com') {
-                console.log("Admin verification failed in admin panel");
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            // Additional integrity check to prevent session hijacking
-            const adminAccessTime = parseInt(sessionStorage.getItem('admin_access_time') || '0');
-            const now = new Date().getTime();
-            const adminTimeoutMs = 3600000; // 1 hour
-            
-            if (!adminAccessTime || (now - adminAccessTime > adminTimeoutMs)) {
-                console.log("Admin session timed out");
-                localStorage.removeItem('qrscan_current_admin');
-                sessionStorage.removeItem('admin_access');
-                sessionStorage.removeItem('access_verified');
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            // Refresh admin session time
-            sessionStorage.setItem('admin_access_time', now.toString());
-            
-            // Display admin profile info
-            const profileDiv = document.getElementById('admin-profile');
-            if (profileDiv) {
-                // Use safe DOM methods instead of innerHTML
-                profileDiv.textContent = '';
+            // Fixed admin verification with proper initialization
+            try {
+                const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin') || '{}');
                 
-                const img = document.createElement('img');
-                img.src = currentAdmin.picture;
-                img.alt = currentAdmin.name;
-                img.className = 'admin-avatar';
+                // Verify admin again even after initial verification
+                if (!currentAdmin || !currentAdmin.email || !currentAdmin.hd || currentAdmin.hd !== 'fixami.com') {
+                    console.log("Admin verification failed in admin panel");
+                    window.location.href = 'login.html';
+                    return;
+                }
                 
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'admin-name';
-                nameSpan.textContent = currentAdmin.name;
+                // Additional integrity check with better timeout logic - FIXED
+                const adminAccessTime = parseInt(sessionStorage.getItem('admin_access_time') || '0');
+                const now = new Date().getTime();
+                const adminTimeoutMs = 3600000; // 1 hour
                 
-                profileDiv.appendChild(img);
-                profileDiv.appendChild(nameSpan);
+                // Initialize admin session time if not set or invalid - FIXED
+                if (!adminAccessTime || isNaN(adminAccessTime)) {
+                    console.log("Initializing admin session time");
+                    sessionStorage.setItem('admin_access_time', now.toString());
+                } else if (now - adminAccessTime > adminTimeoutMs) {
+                    console.log("Admin session timed out");
+                    localStorage.removeItem('qrscan_current_admin');
+                    sessionStorage.removeItem('admin_access');
+                    sessionStorage.removeItem('access_verified');
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                // Refresh admin session time
+                sessionStorage.setItem('admin_access_time', now.toString());
+                
+                // Display admin profile info
+                const profileDiv = document.getElementById('admin-profile');
+                if (profileDiv) {
+                    // Use safe DOM methods instead of innerHTML
+                    profileDiv.textContent = '';
+                    
+                    const img = document.createElement('img');
+                    img.src = currentAdmin.picture;
+                    img.alt = currentAdmin.name;
+                    img.className = 'admin-avatar';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'admin-name';
+                    nameSpan.textContent = currentAdmin.name;
+                    
+                    profileDiv.appendChild(img);
+                    profileDiv.appendChild(nameSpan);
+                }
+                
+                // Set CSRF token for Add IP form
+                const csrfToken = sessionStorage.getItem('csrf_token');
+                if (csrfToken) {
+                    document.getElementById('add_ip_csrf_token').value = csrfToken;
+                } else {
+                    // Generate a new token if none exists
+                    const array = new Uint8Array(16);
+                    window.crypto.getRandomValues(array);
+                    const newToken = Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
+                    sessionStorage.setItem('csrf_token', newToken);
+                    document.getElementById('add_ip_csrf_token').value = newToken;
+                }
+                
+                // Load access log if section exists
+                if (document.getElementById('log-list')) {
+                    loadAccessLog();
+                }
+            } catch (error) {
+                console.error("Error in admin verification:", error);
+                // Don't redirect on error, just log it and continue
             }
             
-            // Set CSRF token for Add IP form
-            const csrfToken = sessionStorage.getItem('csrf_token');
-            if (csrfToken) {
-                document.getElementById('add_ip_csrf_token').value = csrfToken;
-            } else {
-                // Generate a new token if none exists
-                const array = new Uint8Array(16);
-                window.crypto.getRandomValues(array);
-                const newToken = Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
-                sessionStorage.setItem('csrf_token', newToken);
-                document.getElementById('add_ip_csrf_token').value = newToken;
-            }
-            
-            // Load access log if section exists
-            if (document.getElementById('log-list')) {
-                loadAccessLog();
-            }
+            // ...existing code...
         });
         
         // Function to load access log

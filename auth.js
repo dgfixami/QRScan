@@ -177,18 +177,33 @@ function handleCredentialResponse(response) {
     
     // Check if the user belongs to fixami.com domain using hd parameter
     if (responsePayload.hd === 'fixami.com') {
-        // Save admin session
-        const adminData = {
-            name: responsePayload.name,
-            email: responsePayload.email,
-            picture: responsePayload.picture,
-            hd: responsePayload.hd
-        };
-        
-        localStorage.setItem('qrscan_current_admin', JSON.stringify(adminData));
-        
-        // Redirect to admin panel
-        window.location.href = 'admin.html';
+        try {
+            // Save admin session
+            const adminData = {
+                name: responsePayload.name,
+                email: responsePayload.email,
+                picture: responsePayload.picture,
+                hd: responsePayload.hd
+            };
+            
+            localStorage.setItem('qrscan_current_admin', JSON.stringify(adminData));
+            
+            // Set session storage flags immediately
+            sessionStorage.setItem('admin_access', 'true');
+            sessionStorage.setItem('access_verified', 'true');
+            sessionStorage.setItem('admin_access_time', new Date().getTime().toString());
+            
+            console.log("Admin authenticated:", adminData.email);
+            
+            // Add small delay to ensure localStorage is updated before redirect
+            setTimeout(() => {
+                // Redirect to admin panel with timestamp to prevent caching
+                window.location.href = 'admin.html?t=' + new Date().getTime();
+            }, 100);
+        } catch (error) {
+            console.error("Error saving admin session:", error);
+            showMessage('login-message', 'Error setting up admin session. Please try again.', 'error');
+        }
     } else {
         // Show unauthorized message with domain requirement
         showMessage('login-message', 'Only users with a Fixami.com Google Workspace account can access the admin panel.', 'error');

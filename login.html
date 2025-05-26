@@ -8,6 +8,19 @@
     <!-- Add Content Security Policy with exception for Google Sign-In -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.googleusercontent.com data:; frame-src https://accounts.google.com/; connect-src 'self' https://api.ipify.org https://accounts.google.com/">
     
+    <script>
+        // Add this right before the Google Sign-In script to ensure session initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Clear any existing session data that might be causing issues
+            if (window.location.href.includes('?reset=true')) {
+                console.log('Clearing admin session data');
+                localStorage.removeItem('qrscan_current_admin');
+                sessionStorage.removeItem('admin_access');
+                sessionStorage.removeItem('admin_access_time');
+                sessionStorage.removeItem('access_verified');
+            }
+        });
+    </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
