@@ -26,19 +26,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Check if we need to validate IP for non-admin pages
         if (window.location.pathname.endsWith('index.html') && !isAdminLoggedIn()) {
+            // If admin access is set, don't redirect
+            if (sessionStorage.getItem('admin_access') === 'true') {
+                console.log("Admin access flag found in auth.js, skipping IP check");
+                return;
+            }
+            
             // If access is already verified in this session, don't check again
             const accessVerified = sessionStorage.getItem('access_verified');
             if (accessVerified === 'true') {
+                console.log("Access verified flag found in auth.js, skipping IP check");
                 return; // Access already verified
             }
             
+            console.log("Checking IP whitelist in auth.js:", ipAddress);
+            
             // Check if IP is whitelisted
             if (!isIPWhitelisted(ipAddress)) {
+                console.log("IP not whitelisted in auth.js, redirecting");
                 // Redirect to access request page if not whitelisted
                 window.location.href = 'request-access.html';
             } else {
+                console.log("IP is whitelisted in auth.js, marking verified");
                 // If IP is whitelisted, mark access as verified
                 sessionStorage.setItem('access_verified', 'true');
+                sessionStorage.setItem('access_timestamp', new Date().getTime());
             }
         }
         
@@ -241,7 +253,16 @@ function isAdminLoggedIn() {
     }
     
     // Check if the user belongs to fixami.com domain using hd property
-    return currentAdmin.hd === 'fixami.com';
+    const isAdmin = currentAdmin.hd === 'fixami.com';
+    
+    // Set the admin access flag if they are an admin
+    if (isAdmin) {
+        console.log("Admin detected in isAdminLoggedIn:", currentAdmin.email);
+        sessionStorage.setItem('admin_access', 'true');
+        sessionStorage.setItem('access_verified', 'true');
+    }
+    
+    return isAdmin;
 }
 
 // Check if IP is in the whitelist - added sanitization

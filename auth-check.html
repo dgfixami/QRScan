@@ -51,11 +51,16 @@
         
         // Immediately check IP when page loads
         document.addEventListener('DOMContentLoaded', function() {
+            // Debug flag to track flow
+            console.log("Auth-check started");
+            
             // First check if this is an admin
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
             if (currentAdmin && currentAdmin.hd === 'fixami.com') {
                 // Admin can access without IP check
+                console.log("Admin detected, granting access");
                 sessionStorage.setItem('access_verified', 'true');
+                sessionStorage.setItem('admin_access', 'true');
                 window.location.href = 'index.html';
                 return;
             }
@@ -67,6 +72,8 @@
                     const response = await fetch('https://api.ipify.org?format=json');
                     const data = await response.json();
                     const ipAddress = data.ip;
+                    
+                    console.log("IP detected:", ipAddress);
                     
                     // Validate IP
                     if (!isValidIPAddress(ipAddress)) {
@@ -83,11 +90,15 @@
                     if (isWhitelisted) {
                         // Store info and set access verified flag
                         const userEntry = whitelist.find(entry => entry.ip === ipAddress);
+                        console.log("IP is whitelisted for:", userEntry.name);
                         sessionStorage.setItem('user_name', userEntry.name);
                         sessionStorage.setItem('access_verified', 'true');
+                        sessionStorage.setItem('access_timestamp', new Date().getTime());
                         window.location.href = 'index.html';
                     } else {
+                        console.log("IP is not whitelisted, redirecting to request page");
                         // Not whitelisted, redirect to request access
+                        sessionStorage.removeItem('access_verified');
                         window.location.href = 'request-access.html';
                     }
                 } catch (error) {

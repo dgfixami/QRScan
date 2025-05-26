@@ -10,12 +10,19 @@
     <script>
         // Check if user is authenticated as admin before showing content
         document.addEventListener('DOMContentLoaded', function() {
+            console.log("Admin.html authentication check started");
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
             
             // If admin data exists, verify domain using hd property
             if (!currentAdmin || currentAdmin.hd !== 'fixami.com') {
+                console.log("Not authenticated as admin, redirecting to login");
                 // Redirect to login page if not from fixami.com domain
                 window.location.href = 'login.html';
+            } else {
+                console.log("Admin verified:", currentAdmin.email);
+                // Mark as admin and verified in session
+                sessionStorage.setItem('admin_access', 'true');
+                sessionStorage.setItem('access_verified', 'true');
             }
         });
     </script>

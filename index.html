@@ -10,18 +10,38 @@
     <script>
         // Inline script to immediately check access before loading content
         (function() {
+            // Debug logging
+            console.log("Index.html access check started");
+            
             // If admin is logged in, they can always access
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
             if (currentAdmin) {
+                console.log("Admin detected in index.html, allowing access");
+                // Set admin access flag to prevent later redirects
+                sessionStorage.setItem('admin_access', 'true');
+                sessionStorage.setItem('access_verified', 'true');
                 return; // Admin can access
             }
             
             // Check for access verified flag 
             const accessVerified = sessionStorage.getItem('access_verified');
             if (accessVerified === 'true') {
-                return; // Access already verified
+                console.log("Access already verified by flag");
+                
+                // Check if verification is recent (within last hour)
+                const accessTimestamp = parseInt(sessionStorage.getItem('access_timestamp') || '0');
+                const now = new Date().getTime();
+                const oneHourMs = 60 * 60 * 1000;
+                
+                if (now - accessTimestamp < oneHourMs) {
+                    console.log("Access verification is recent, allowing access");
+                    return; // Access recently verified
+                } else {
+                    console.log("Access verification expired, rechecking");
+                }
             }
             
+            console.log("Access not verified, redirecting to auth-check");
             // Otherwise redirect to auth check
             window.location.href = 'auth-check.html';
         })();
