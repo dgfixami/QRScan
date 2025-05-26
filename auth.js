@@ -743,6 +743,9 @@ function approveAccessRequest(ip, name) {
     localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
     localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
     
+    // Log this approval action
+    logAccessAction(`IP ${ip} (${sanitizeInput(name)}) was approved and added to whitelist`);
+    
     // Refresh lists
     loadAccessRequests();
     loadWhitelistedIPs();
@@ -784,6 +787,9 @@ function addIPToWhitelist(entry) {
     
     // Save changes
     localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
+    
+    // Log manual addition to whitelist
+    logAccessAction(`IP ${entry.ip} (${entry.name}) was manually added to whitelist`);
     
     return true;
 }
