@@ -26,10 +26,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Check if we need to validate IP for non-admin pages
         if (window.location.pathname.endsWith('index.html') && !isAdminLoggedIn()) {
+            // If access is already verified in this session, don't check again
+            const accessVerified = sessionStorage.getItem('access_verified');
+            if (accessVerified === 'true') {
+                return; // Access already verified
+            }
+            
             // Check if IP is whitelisted
             if (!isIPWhitelisted(ipAddress)) {
                 // Redirect to access request page if not whitelisted
                 window.location.href = 'request-access.html';
+            } else {
+                // If IP is whitelisted, mark access as verified
+                sessionStorage.setItem('access_verified', 'true');
             }
         }
         
@@ -657,10 +666,10 @@ function approveAccessRequest(ip, name) {
     
     // Create new whitelist entry
     const newEntry = {
-        name: name,
+        name: sanitizeInput(name),
         ip: ip,
         approved: true,
-        addedBy: adminName,
+        addedBy: sanitizeInput(adminName),
         addedDate: new Date().toISOString()
     };
     

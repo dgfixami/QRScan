@@ -55,6 +55,7 @@
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
             if (currentAdmin && currentAdmin.hd === 'fixami.com') {
                 // Admin can access without IP check
+                sessionStorage.setItem('access_verified', 'true');
                 window.location.href = 'index.html';
                 return;
             }
@@ -80,9 +81,10 @@
                     const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
                     
                     if (isWhitelisted) {
-                        // Store info and redirect to main page
+                        // Store info and set access verified flag
                         const userEntry = whitelist.find(entry => entry.ip === ipAddress);
                         sessionStorage.setItem('user_name', userEntry.name);
+                        sessionStorage.setItem('access_verified', 'true');
                         window.location.href = 'index.html';
                     } else {
                         // Not whitelisted, redirect to request access

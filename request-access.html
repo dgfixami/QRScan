@@ -44,6 +44,9 @@
     <script>
         // Set CSRF token when page loads
         document.addEventListener('DOMContentLoaded', function() {
+            // Clear access verification flag since we're on the request page
+            sessionStorage.removeItem('access_verified');
+            
             // Get token from session storage or generate a new one
             let csrfToken = sessionStorage.getItem('csrf_token');
             if (!csrfToken) {

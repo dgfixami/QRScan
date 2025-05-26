@@ -16,8 +16,13 @@
                 return; // Admin can access
             }
             
-            // Otherwise redirect to auth.js to do IP check
-            // This is just to ensure the page doesn't briefly show before redirecting
+            // Check for access verified flag 
+            const accessVerified = sessionStorage.getItem('access_verified');
+            if (accessVerified === 'true') {
+                return; // Access already verified
+            }
+            
+            // Otherwise redirect to auth check
             window.location.href = 'auth-check.html';
         })();
     </script>
