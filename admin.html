@@ -164,7 +164,8 @@
                     type: 'action'
                 })),
                 ...revocations.map(entry => ({
-                    action: `IP ${entry.ip} (${entry.name}) was revoked by ${entry.revokedBy}`,
+                    // Fix: Remove the admin name from the action text
+                    action: `IP ${entry.ip} (${entry.name}) was revoked`,
                     timestamp: entry.revokedAt,
                     admin: entry.revokedBy,
                     type: 'revocation'
