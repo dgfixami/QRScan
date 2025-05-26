@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checking Access - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add CSP header -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://unpkg.com https://script.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://api.ipify.org https://script.google.com">
+    <!-- Add security script -->
+    <script src="security.js"></script>
     <style>
         .loading-container {
             display: flex;
@@ -43,7 +47,10 @@
         document.addEventListener('DOMContentLoaded', function() {
             // First check if this is an admin
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-            if (currentAdmin && currentAdmin.email === 'dawid.garstecki@fixami.com') {
+            if (currentAdmin && 
+                currentAdmin.email && 
+                currentAdmin.email.endsWith('@fixami.com') &&
+                currentAdmin.hd === 'fixami.com') {
                 // Admin can access without IP check
                 window.location.href = 'index.html';
                 return;
@@ -57,6 +64,11 @@
                     const data = await response.json();
                     const ipAddress = data.ip;
                     
+                    // Validate IP format
+                    if (!isValidIPAddress(ipAddress)) {
+                        throw new Error("Invalid IP address format received");
+                    }
+                    
                     // Store IP in session
                     sessionStorage.setItem('user_ip', ipAddress);
                     
@@ -67,7 +79,7 @@
                     if (isWhitelisted) {
                         // Store info and redirect to main page
                         const userEntry = whitelist.find(entry => entry.ip === ipAddress);
-                        sessionStorage.setItem('user_name', userEntry.name);
+                        sessionStorage.setItem('user_name', sanitizeInput(userEntry.name));
                         window.location.href = 'index.html';
                     } else {
                         // Not whitelisted, redirect to request access
@@ -75,12 +87,28 @@
                     }
                 } catch (error) {
                     console.error("Error checking access:", error);
-                    // Show error and link to request access
-                    document.querySelector('.loading-container').innerHTML = `
-                        <h2>Error Checking Access</h2>
-                        <p>Unable to verify your device. Please try again or request access.</p>
-                        <a href="request-access.html" class="retry-button">Request Access</a>
-                    `;
+                    // Show error and link to request access using DOM methods
+                    const container = document.querySelector('.loading-container');
+                    
+                    // Clear container
+                    container.innerHTML = '';
+                    
+                    // Create error elements
+                    const heading = document.createElement('h2');
+                    heading.textContent = 'Error Checking Access';
+                    
+                    const message = document.createElement('p');
+                    message.textContent = 'Unable to verify your device. Please try again or request access.';
+                    
+                    const link = document.createElement('a');
+                    link.href = 'request-access.html';
+                    link.className = 'retry-button';
+                    link.textContent = 'Request Access';
+                    
+                    // Append to container
+                    container.appendChild(heading);
+                    container.appendChild(message);
+                    container.appendChild(link);
                 }
             }
             

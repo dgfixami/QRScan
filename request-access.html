@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Access - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add CSP header -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://unpkg.com https://script.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://api.ipify.org https://script.google.com">
+    <!-- Add security script -->
+    <script src="security.js"></script>
 </head>
 <body>
     <div class="auth-container">
@@ -17,11 +21,14 @@
             <p>Your device will be identified using IP: <span id="user-ip" class="ip-address">Loading...</span></p>
         </div>
         
-        <!-- New element to display pending request status -->
+        <!-- Element to display pending request status -->
         <div id="request-status" class="request-status" style="display: none;"></div>
         
         <form class="auth-form" id="request-form">
-            <input type="text" id="request-name" placeholder="Your Name" required>
+            <!-- Add proper pattern validation -->
+            <input type="text" id="request-name" placeholder="Your Name" required
+                   pattern="[A-Za-z0-9 ._-]{3,50}" 
+                   title="Name must be 3-50 characters and contain only letters, numbers, spaces and ._-">
             <button type="submit">Submit Request</button>
         </form>
         
@@ -30,6 +37,7 @@
         </div>
     </div>
     
+    <script src="security.js"></script>
     <script src="auth.js"></script>
 </body>
 </html>

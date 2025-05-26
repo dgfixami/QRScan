@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add strict CSP header -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://unpkg.com https://script.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://api.ipify.org https://script.google.com">
+    <!-- Add security script -->
+    <script src="security.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -14,7 +18,7 @@
         
         <div id="login-message" class="auth-message" style="display: none;"></div>
         
-        <p class="login-info">Unauthorised access.</p>
+        <p class="login-info">Unauthorised access</p>
         
         <div class="google-login-container">
             <div id="g_id_onload"

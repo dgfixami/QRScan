@@ -5,18 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Add strict CSP header -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://unpkg.com https://script.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://api.ipify.org https://script.google.com">
+    <!-- Add security script -->
+    <script src="security.js"></script>
     <script>
         // Inline script to immediately check access before loading content
         (function() {
             // If admin is logged in, they can always access
             const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-            if (currentAdmin) {
+            if (currentAdmin && currentAdmin.email && 
+                currentAdmin.email.endsWith('@fixami.com') && 
+                currentAdmin.hd === 'fixami.com') {
                 return; // Admin can access
             }
             
-            // Otherwise redirect to auth.js to do IP check
-            // This is just to ensure the page doesn't briefly show before redirecting
-            window.location.href = 'auth-check.html';
+            // Get IP from session if available
+            const userIP = sessionStorage.getItem('user_ip');
+            if (!userIP) {
+                // Redirect to auth check if no IP in session
+                window.location.href = 'auth-check.html';
+                return;
+            }
+            
+            // Get whitelist and check if IP is allowed
+            const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+            const isWhitelisted = whitelist.some(entry => entry.ip === userIP && entry.approved);
+            
+            if (!isWhitelisted) {
+                // Redirect to auth check if IP not whitelisted
+                window.location.href = 'auth-check.html';
+            }
         })();
     </script>
 </head>
@@ -64,11 +83,13 @@
             <div class="lookup-container">
                 <h3>Manual Look Up Code</h3>
                 <div class="lookup-form">
-                    <input type="text" id="lookup-code" placeholder="Enter QR Code">
+                    <input type="text" id="lookup-code" placeholder="Enter QR Code" 
+                           pattern="[A-Za-z0-9-_]{3,50}" 
+                           title="Please enter a valid QR code (3-50 alphanumeric characters)">
                     <button id="lookup-button">Search</button>
                 </div>
                 <div id="lookup-result" class="hidden">
-                    <!-- This will be populated dynamically -->
+                    <!-- This will be populated dynamically using DOM methods -->
                 </div>
             </div>
             
@@ -80,6 +101,7 @@
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="security.js"></script>
     <script src="auth.js"></script>
     <script src="script.js"></script>
 </body>
