@@ -4,40 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.ipify.org https://script.google.com https://*.apps.googleusercontent.com;">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
     <link rel="stylesheet" href="style.css">
     <script>
-        // Add security checks to inline script
+        // Inline script to immediately check access before loading content
         (function() {
-            try {
-                // If admin is logged in, they can always access
-                const adminDataString = sessionStorage.getItem('qrscan_current_admin');
-                if (!adminDataString) {
-                    window.location.href = 'auth-check.html';
-                    return;
-                }
-                
-                // Validate JSON structure before using it
-                const adminData = JSON.parse(adminDataString);
-                if (!adminData || typeof adminData !== 'object' || !adminData.email || !adminData.hd) {
-                    // Invalid admin data
-                    sessionStorage.removeItem('qrscan_current_admin');
-                    window.location.href = 'auth-check.html';
-                    return;
-                }
-                
-                // Add domain validation
-                if (adminData.hd !== 'fixami.com') {
-                    sessionStorage.removeItem('qrscan_current_admin');
-                    window.location.href = 'auth-check.html';
-                }
-            } catch (error) {
-                console.error("Authentication error:", error);
-                window.location.href = 'auth-check.html';
+            // If admin is logged in, they can always access
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+            if (currentAdmin) {
+                return; // Admin can access
             }
+            
+            // Otherwise redirect to auth.js to do IP check
+            // This is just to ensure the page doesn't briefly show before redirecting
+            window.location.href = 'auth-check.html';
         })();
     </script>
 </head>

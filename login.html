@@ -4,11 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - QR Code Scanner</title>
-    <!-- Add security headers -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.ipify.org https://accounts.google.com https://*.googleusercontent.com;">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
     <link rel="stylesheet" href="style.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -19,14 +14,13 @@
         
         <div id="login-message" class="auth-message" style="display: none;"></div>
         
-        <p class="login-info">Admin access is restricted to authorized Fixami employees.</p>
+        <p class="login-info">Unauthorised access.</p>
         
         <div class="google-login-container">
             <div id="g_id_onload"
                 data-client_id="681607833593-08kg1qc54mq4vn9vghd5rktuktovv5uu.apps.googleusercontent.com"
                 data-callback="handleCredentialResponse"
-                data-auto_prompt="false"
-                data-context="signin">
+                data-auto_prompt="false">
             </div>
             <div class="g_id_signin"
                 data-type="standard"

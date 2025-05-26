@@ -26,17 +26,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Check if we need to validate IP for non-admin pages
         if (window.location.pathname.endsWith('index.html') && !isAdminLoggedIn()) {
-            // Check if IP is whitelisted using secure server-side check
-            checkIPWhitelistedSecurely(ipAddress).then(isWhitelisted => {
-                if (!isWhitelisted) {
-                    // Redirect to access request page if not whitelisted
-                    window.location.href = 'request-access.html';
-                }
-            }).catch(error => {
-                console.error("IP whitelist check failed:", error);
-                // Default to request access if the check fails for security
+            // Check if IP is whitelisted
+            if (!isIPWhitelisted(ipAddress)) {
+                // Redirect to access request page if not whitelisted
                 window.location.href = 'request-access.html';
-            });
+            }
         }
         
         // Request access form handler - simplified for name only
@@ -155,126 +149,40 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Google Sign-In callback handler needs proper verification
+// Google Sign-In callback handler
 function handleCredentialResponse(response) {
-    if (!response || !response.credential) {
-        showMessage('login-message', 'Invalid response from Google authentication', 'error');
-        return;
-    }
+    // Decode the JWT token from Google
+    const responsePayload = decodeJwtResponse(response.credential);
     
-    try {
-        // Decode the JWT token from Google
-        const responsePayload = decodeJwtResponse(response.credential);
+    // Check if the user belongs to fixami.com domain using hd parameter
+    if (responsePayload.hd === 'fixami.com') {
+        // Save admin session
+        const adminData = {
+            name: responsePayload.name,
+            email: responsePayload.email,
+            picture: responsePayload.picture,
+            hd: responsePayload.hd
+        };
         
-        // Add proper validation of token integrity
-        if (!validateGoogleToken(responsePayload)) {
-            showMessage('login-message', 'Invalid Google authentication token', 'error');
-            return;
-        }
+        localStorage.setItem('qrscan_current_admin', JSON.stringify(adminData));
         
-        // Check if the user belongs to fixami.com domain using hd parameter
-        if (responsePayload.hd === 'fixami.com') {
-            // Save admin session with proper sanitization
-            const adminData = {
-                name: sanitizeInput(responsePayload.name),
-                email: sanitizeInput(responsePayload.email),
-                picture: sanitizeInput(responsePayload.picture),
-                hd: sanitizeInput(responsePayload.hd)
-            };
-            
-            // Use sessionStorage instead of localStorage for security-sensitive session
-            sessionStorage.setItem('qrscan_current_admin', JSON.stringify(adminData));
-            
-            // Redirect to admin panel
-            window.location.href = 'admin.html';
-        } else {
-            // Show unauthorized message with domain requirement
-            showMessage('login-message', 'Only users with a Fixami.com Google Workspace account can access the admin panel.', 'error');
-        }
-    } catch (error) {
-        console.error("Google auth error:", error);
-        showMessage('login-message', 'Authentication error. Please try again.', 'error');
+        // Redirect to admin panel
+        window.location.href = 'admin.html';
+    } else {
+        // Show unauthorized message with domain requirement
+        showMessage('login-message', 'Only users with a Fixami.com Google Workspace account can access the admin panel.', 'error');
     }
 }
 
-// Add proper Google token validation
-function validateGoogleToken(payload) {
-    // Minimal validation requirements
-    if (!payload.iss || !payload.iss.includes('accounts.google.com')) {
-        return false;
-    }
+// Helper function to decode JWT token
+function decodeJwtResponse(token) {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
     
-    if (!payload.email || !payload.email_verified) {
-        return false;
-    }
-    
-    // Check token expiration
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (!payload.exp || payload.exp < currentTime) {
-        return false;
-    }
-    
-    return true;
-}
-
-// Add a critical security function to validate input
-function sanitizeInput(input) {
-    if (!input) return '';
-    
-    // Convert to string if not already
-    const str = String(input);
-    
-    // Basic XSS protection by replacing HTML special chars
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-// Replace client-side IP whitelist check with server call
-async function checkIPWhitelistedSecurely(ipAddress) {
-    try {
-        // This is where you would make a call to your backend service
-        // For now, we'll simulate with the existing localStorage check
-        // but in production, this should be a server API call
-        const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-        return whitelist.some(entry => entry.ip === ipAddress && entry.approved);
-        
-        // Proper implementation would be:
-        /*
-        const response = await fetch('https://your-server.com/api/check-ip-whitelist', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ ip: ipAddress })
-        });
-        const data = await response.json();
-        return data.isWhitelisted;
-        */
-    } catch (error) {
-        console.error("IP whitelist check error:", error);
-        return false; // Fail closed for security
-    }
-}
-
-// Helper to show messages with sanitized content
-function showMessage(elementId, message, type) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.textContent = message; // Using textContent instead of innerHTML for security
-        element.className = `auth-message ${type}`;
-        element.style.display = 'block';
-        
-        // Hide message after 5 seconds for success/info messages
-        if (type === 'success' || type === 'info') {
-            setTimeout(() => {
-                element.style.display = 'none';
-            }, 5000);
-        }
-    }
+    return JSON.parse(jsonPayload);
 }
 
 // Get the user's IP address using ipify API

@@ -1,34 +1,3 @@
-// Add security functionality at the top of the file
-function sanitizeHtml(html) {
-    if (!html) return '';
-    
-    // Convert to string if not already
-    const str = String(html);
-    
-    // Basic XSS protection
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-// Add a rate limiter for scan requests
-const scanRateLimiter = {
-    lastScanTime: 0,
-    minTimeBetweenScans: 1500, // 1.5 seconds
-    
-    canScan: function() {
-        const now = Date.now();
-        if (now - this.lastScanTime < this.minTimeBetweenScans) {
-            return false;
-        }
-        this.lastScanTime = now;
-        return true;
-    }
-};
-
 document.addEventListener('DOMContentLoaded', function() {
     const modeToggle = document.getElementById('mode-toggle');
     const modeValue = document.getElementById('mode-value');
@@ -95,11 +64,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup lookup input enter key handler
     if(lookupCode) {
-        lookupCode.addEventListener('input', function() {
-            // Allow only alphanumeric characters and common symbols
-            this.value = this.value.replace(/[^\w\s\-\.]/gi, '');
-        });
-        
         lookupCode.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 lookupAttendee();
@@ -313,38 +277,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to fetch attendee data from Google Sheets for manual lookup only
     function fetchAttendeeData(code) {
-        // Input validation
-        if (!code || typeof code !== 'string') {
-            showLookupError('Invalid code format');
-            return;
-        }
-        
-        // Add validation to prevent injection
-        const sanitizedCode = code.replace(/[^\w\-\.]/gi, '');
-        if (sanitizedCode !== code) {
-            showLookupError('Invalid characters in code');
-            return;
-        }
-        
         // Show that we're loading
         lookupResult.innerHTML = '<div class="loading">Loading...</div>';
         lookupResult.classList.remove('hidden');
         
-        // Implement rate limiting
-        if (!scanRateLimiter.canScan()) {
-            showLookupError('Please wait before trying again');
-            logToPage('Rate limit applied - too many requests', 'warning');
-            return;
-        }
-        
         // First get check-in/goodie bag status from first API
-        fetch(`${scriptUrl}?code=${encodeURIComponent(sanitizedCode)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Server returned ${response.status}`);
-                }
-                return response.json();
-            })
+        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
+            .then(response => response.json())
             .then(data => {
                 if (!data.success) {
                     showLookupError(data.message || 'Failed to find check-in status');
@@ -394,12 +333,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Modified function to display attendee data - updated to show eligibility warning
     function displayAttendeeData(data) {
-        // Input validation
-        if (!data || typeof data !== 'object') {
-            showLookupError('Invalid data received');
-            return;
-        }
-        
         // Clear any previous content
         lookupResult.innerHTML = '';
         
@@ -407,20 +340,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const infoDiv = document.createElement('div');
         infoDiv.className = 'attendee-info';
         
-        // Add name and email if available - sanitize all values
+        // Add name and email if available
         if (data.name) {
             const nameP = document.createElement('p');
-            const nameStrong = document.createElement('strong');
-            nameStrong.textContent = 'Name:';
-            
-            nameP.appendChild(nameStrong);
-            nameP.appendChild(document.createTextNode(' '));
-            
-            const nameSpan = document.createElement('span');
-            nameSpan.id = 'attendee-name';
-            nameSpan.textContent = data.name || '-';
-            
-            nameP.appendChild(nameSpan);
+            nameP.innerHTML = `<strong>Name:</strong> <span id="attendee-name">${data.name || '-'}</span>`;
             infoDiv.appendChild(nameP);
         }
         
@@ -612,8 +535,6 @@ document.addEventListener('DOMContentLoaded', function() {
         logEntry.className = `log-entry ${type}`;
         
         const timestamp = new Date().toLocaleTimeString();
-        
-        // Use textContent instead of innerHTML
         logEntry.textContent = `${timestamp}: ${message}`;
         
         logMessages.prepend(logEntry);
