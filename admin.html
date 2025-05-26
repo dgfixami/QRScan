@@ -105,25 +105,50 @@
     <script>
         // Display admin info
         document.addEventListener('DOMContentLoaded', function() {
-            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-            if (currentAdmin) {
-                const profileDiv = document.getElementById('admin-profile');
-                if (profileDiv) {
-                    // Use safe DOM methods instead of innerHTML
-                    profileDiv.textContent = '';
-                    
-                    const img = document.createElement('img');
-                    img.src = currentAdmin.picture;
-                    img.alt = currentAdmin.name;
-                    img.className = 'admin-avatar';
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'admin-name';
-                    nameSpan.textContent = currentAdmin.name;
-                    
-                    profileDiv.appendChild(img);
-                    profileDiv.appendChild(nameSpan);
-                }
+            // Enhanced admin verification with anti-tampering
+            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin') || '{}');
+            
+            // Verify admin again even after initial verification
+            if (!currentAdmin || !currentAdmin.email || !currentAdmin.hd || currentAdmin.hd !== 'fixami.com') {
+                console.log("Admin verification failed in admin panel");
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Additional integrity check to prevent session hijacking
+            const adminAccessTime = parseInt(sessionStorage.getItem('admin_access_time') || '0');
+            const now = new Date().getTime();
+            const adminTimeoutMs = 3600000; // 1 hour
+            
+            if (!adminAccessTime || (now - adminAccessTime > adminTimeoutMs)) {
+                console.log("Admin session timed out");
+                localStorage.removeItem('qrscan_current_admin');
+                sessionStorage.removeItem('admin_access');
+                sessionStorage.removeItem('access_verified');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Refresh admin session time
+            sessionStorage.setItem('admin_access_time', now.toString());
+            
+            // Display admin profile info
+            const profileDiv = document.getElementById('admin-profile');
+            if (profileDiv) {
+                // Use safe DOM methods instead of innerHTML
+                profileDiv.textContent = '';
+                
+                const img = document.createElement('img');
+                img.src = currentAdmin.picture;
+                img.alt = currentAdmin.name;
+                img.className = 'admin-avatar';
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'admin-name';
+                nameSpan.textContent = currentAdmin.name;
+                
+                profileDiv.appendChild(img);
+                profileDiv.appendChild(nameSpan);
             }
             
             // Set CSRF token for Add IP form
@@ -214,6 +239,63 @@
                 logItem.appendChild(adminSpan);
                 
                 logList.appendChild(logItem);
+            });
+        }
+        
+        // When adding IP addresses, prevent prototype pollution attacks
+        const addIPForm = document.getElementById('add-ip-form');
+        if (addIPForm) {
+            addIPForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Get and immediately validate form inputs
+                const nameInput = document.getElementById('new-ip-name');
+                const ipInput = document.getElementById('new-ip-address');
+                
+                // Client-side validation with sanitization
+                const name = nameInput.value.trim();
+                const ip = ipInput.value.trim();
+                
+                const namePattern = /^[A-Za-z\s\-']{2,50}$/;
+                const ipPattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+                
+                // Additional validation beyond HTML5 pattern attribute
+                if (!namePattern.test(name)) {
+                    alert('Invalid name format. Use only letters, spaces, hyphens, and apostrophes.');
+                    return false;
+                }
+                
+                if (!ipPattern.test(ip)) {
+                    alert('Invalid IP address format. Must be a valid IPv4 address.');
+                    return false;
+                }
+                
+                // Check CSRF token
+                const formToken = document.getElementById('add_ip_csrf_token').value;
+                const sessionToken = sessionStorage.getItem('csrf_token');
+                
+                if (!formToken || !sessionToken || formToken !== sessionToken) {
+                    alert('Security verification failed. Please refresh the page.');
+                    window.location.reload();
+                    return false;
+                }
+                
+                // Create sanitized entry object
+                const entry = {
+                    name: name,
+                    ip: ip,
+                    approved: true,
+                    addedBy: currentAdmin.name || 'Admin',
+                    addedDate: new Date().toISOString()
+                };
+                
+                // Add IP with sanitized values
+                if (addIPToWhitelist(entry)) {
+                    // Close modal and refresh lists
+                    document.getElementById('add-ip-modal').close();
+                    addIPForm.reset();
+                    loadWhitelistedIPs();
+                }
             });
         }
     </script>

@@ -94,30 +94,65 @@
             }
         }
         
-        // Main form submission function
+        // Main form submission function with enhanced security
         function submitRequest(event) {
             event.preventDefault();
             console.log("Submit button clicked");
             
             const nameInput = document.getElementById('request-name');
-            const name = nameInput.value.trim();
             const submitBtn = document.getElementById('submit-btn');
+            
+            // Ensure form exists and hasn't been tampered with
+            if (!nameInput || !submitBtn) {
+                console.error("Required form elements missing - possible tampering detected");
+                showMessage("Security error: Invalid form structure detected", 'error');
+                return false;
+            }
             
             // Disable button to prevent multiple submissions
             submitBtn.disabled = true;
             submitBtn.textContent = 'Processing...';
             
+            // Get and immediately validate name input
+            const name = nameInput.value.trim();
+            
             console.log("Processing request for:", name, userIP);
             
-            // Validate name input
-            if (!name) {
-                showMessage("Please enter your name", 'error');
+            // Validate name pattern to prevent injection
+            const namePattern = /^[A-Za-z\s\-']{2,50}$/;
+            if (!name || !namePattern.test(name)) {
+                showMessage("Please enter a valid name using only letters, spaces, hyphens, and apostrophes", 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Request';
+                return false;
+            }
+            
+            // IP validation with improved checks
+            if (!userIP || typeof userIP !== 'string' || 
+                !userIP.match(/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/)) {
+                showMessage("Invalid IP address detected", 'error');
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit Request';
                 return false;
             }
             
             try {
+                // Implementation of rate limiting
+                const lastSubmitTime = parseInt(sessionStorage.getItem('last_submit_time') || '0');
+                const now = Date.now();
+                const timeSinceLastSubmit = now - lastSubmitTime;
+                
+                // Rate limiting: only allow 1 submission per 2 seconds
+                if (lastSubmitTime > 0 && timeSinceLastSubmit < 2000) {
+                    showMessage("Please wait before submitting again", 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit Request';
+                    return false;
+                }
+                
+                // Update rate limiting timestamp
+                sessionStorage.setItem('last_submit_time', now.toString());
+                
                 // Check again if already whitelisted
                 if (isWhitelisted(userIP)) {
                     handleWhitelistedIP();
@@ -223,17 +258,27 @@
             }
         }
         
-        // Add new access request
+        // Add new access request with enhanced security
         function addAccessRequest(name, ip) {
             try {
-                const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+                // Sanitize and validate again before storage
+                const sanitizedName = sanitizeInput(name);
                 
-                // Add new request
-                requests.push({
-                    name: sanitizeText(name),
+                if (!isValidIP(ip)) {
+                    console.error("Invalid IP format detected at submission time");
+                    return false;
+                }
+                
+                const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+                
+                // Add new request with object freeze to prevent modification
+                const newRequest = Object.freeze({
+                    name: sanitizedName,
                     ip: ip,
                     requestDate: new Date().toISOString()
                 });
+                
+                requests.push(newRequest);
                 
                 // Save to localStorage
                 localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
@@ -242,6 +287,51 @@
                 console.error("Error adding request:", error);
                 return false;
             }
+        }
+        
+        // Helper function to sanitize input
+        function sanitizeInput(input) {
+            if (typeof input !== 'string') return '';
+            
+            // First strip any HTML/script tags
+            let sanitized = input.replace(/<[^>]*>/g, '');
+            
+            // Replace special characters with HTML entities
+            sanitized = sanitized.replace(/[<>&"'`=]/g, function(c) {
+                return {
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '&': '&amp;',
+                    '"': '&quot;',
+                    "'": '&#39;',
+                    '`': '&#96;',
+                    '=': '&#61;'
+                }[c];
+            });
+            
+            // Limit string length to prevent excessive data
+            return sanitized.substring(0, 50);
+        }
+        
+        // Helper function to validate IP addresses
+        function isValidIP(ip) {
+            if (!ip || typeof ip !== 'string') return false;
+            
+            // Strict IPv4 pattern check
+            const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            if (!ipv4Pattern.test(ip)) return false;
+            
+            // Additional integrity check - make sure it's correctly formatted without excess data
+            const parts = ip.split('.');
+            if (parts.length !== 4) return false;
+            
+            // Check for leading zeros which can be used for octal interpretation
+            for (const part of parts) {
+                if (part.length > 1 && part.startsWith('0')) return false;
+                if (isNaN(parseInt(part, 10))) return false;
+            }
+            
+            return true;
         }
         
         // Show pending request status

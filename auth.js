@@ -304,27 +304,95 @@ function isIPWhitelisted(ipAddress) {
     return isWhitelisted;
 }
 
-// Validate IP address format
-function isValidIPAddress(ip) {
-    if (!ip || typeof ip !== 'string') return false;
-    
-    // IPv4 regex pattern
-    const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    return ipv4Pattern.test(ip);
-}
-
-// Sanitize input to prevent XSS
+// Enhanced sanitize input to prevent code injection
 function sanitizeInput(input) {
     if (typeof input !== 'string') return '';
-    return input.replace(/[<>&"']/g, function(c) {
+    
+    // First strip any HTML/script tags
+    let sanitized = input.replace(/<[^>]*>/g, '');
+    
+    // Replace special characters with HTML entities
+    sanitized = sanitized.replace(/[<>&"'`=]/g, function(c) {
         return {
             '<': '&lt;',
             '>': '&gt;',
             '&': '&amp;',
             '"': '&quot;',
-            "'": '&#39;'
+            "'": '&#39;',
+            '`': '&#96;',
+            '=': '&#61;'
         }[c];
     });
+    
+    // Limit string length to prevent excessive data
+    return sanitized.substring(0, 250);
+}
+
+// Enhanced IP validation with more thorough checks
+function isValidIPAddress(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    
+    // Strict IPv4 pattern check
+    const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipv4Pattern.test(ip)) return false;
+    
+    // Additional integrity check - make sure it's correctly formatted without excess data
+    const parts = ip.split('.');
+    if (parts.length !== 4) return false;
+    
+    // Check for leading zeros which can be used for octal interpretation
+    for (const part of parts) {
+        if (part.length > 1 && part.startsWith('0')) return false;
+        if (isNaN(parseInt(part, 10))) return false;
+    }
+    
+    return true;
+}
+
+// Add IP directly to whitelist with enhanced validation
+function addIPToWhitelist(entry) {
+    // Validate input to prevent object modification attacks
+    if (!entry || typeof entry !== 'object') return false;
+    
+    // Validate all fields to prevent prototype pollution
+    const validatedEntry = {
+        name: sanitizeInput(String(entry.name || '')).substring(0, 50),
+        ip: sanitizeInput(String(entry.ip || '')).substring(0, 15),
+        approved: Boolean(entry.approved),
+        addedBy: sanitizeInput(String(entry.addedBy || '')).substring(0, 50),
+        addedDate: new Date().toISOString() // Always use server-generated date
+    };
+    
+    // Ensure IP is valid after sanitization
+    if (!isValidIPAddress(validatedEntry.ip)) {
+        alert('Invalid IP address format!');
+        return false;
+    }
+    
+    // Validate name pattern (similar to HTML pattern validation)
+    const namePattern = /^[A-Za-z\s\-']+$/;
+    if (!namePattern.test(validatedEntry.name)) {
+        alert('Invalid name format! Only letters, spaces, hyphens, and apostrophes are allowed.');
+        return false;
+    }
+    
+    // Check if IP already exists
+    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+    if (whitelist.some(e => e.ip === validatedEntry.ip)) {
+        alert('This IP address is already in the whitelist!');
+        return false;
+    }
+    
+    // Add new entry
+    whitelist.push(validatedEntry);
+    
+    // Save changes
+    localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
+    
+    // Log manual addition to whitelist
+    logAccessAction(`IP ${validatedEntry.ip} (${validatedEntry.name}) was manually added to whitelist`);
+    
+    return true;
 }
 
 // Check for pending requests for this IP
@@ -400,12 +468,19 @@ function submitAccessRequest(name, ipAddress) {
         return false;
     }
     
+    // Check name pattern
+    const namePattern = /^[A-Za-z\s\-']{2,50}$/;
+    if (!namePattern.test(name)) {
+        showMessage('request-message', 'Invalid name format. Use only letters, spaces, hyphens, and apostrophes.', 'error');
+        return false;
+    }
+    
     if (!isValidIPAddress(ipAddress)) {
         showMessage('request-message', 'Invalid IP address format', 'error');
         return false;
     }
     
-    // CSRF protection
+    // CSRF protection with double-check
     const csrfToken = sessionStorage.getItem('csrf_token');
     const formToken = document.getElementById('csrf_token')?.value;
     
@@ -414,27 +489,16 @@ function submitAccessRequest(name, ipAddress) {
         return false;
     }
     
-    // Check if IP is already whitelisted - do this check again to prevent form bypass
-    if (isIPWhitelisted(ipAddress)) {
-        showMessage('request-message', 'Your device is already approved for access', 'success');
-        
-        // Update session storage to ensure access is marked as verified
-        sessionStorage.setItem('access_verified', 'true'); 
-        sessionStorage.setItem('access_timestamp', new Date().getTime());
-        
-        // Get user name for display
-        const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-        const userEntry = whitelist.find(entry => entry.ip === ipAddress);
-        if (userEntry) {
-            sessionStorage.setItem('user_name', userEntry.name);
-        }
-        
-        // Redirect to index page after a short delay
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1500);
-        return true;
+    // Rate limiting check
+    const lastRequestTime = parseInt(sessionStorage.getItem('last_request_time') || '0');
+    const now = new Date().getTime();
+    if (now - lastRequestTime < 1000) { // 1 second minimum between requests
+        showMessage('request-message', 'Please wait before submitting another request', 'error');
+        return false;
     }
+    
+    // Update rate limiting timestamp
+    sessionStorage.setItem('last_request_time', now.toString());
     
     // Check if request already exists for this IP
     const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
@@ -715,6 +779,16 @@ function loadWhitelistedIPs() {
 
 // Approve access request and add IP to whitelist
 function approveAccessRequest(ip, name) {
+    // Validate inputs first
+    if (!isValidIPAddress(ip)) return false;
+    
+    // Sanitize name input
+    name = sanitizeInput(String(name || '')).substring(0, 50);
+    
+    // Validate name pattern
+    const namePattern = /^[A-Za-z\s\-']+$/;
+    if (!namePattern.test(name)) return false;
+    
     const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
     
@@ -722,16 +796,23 @@ function approveAccessRequest(ip, name) {
     const requestIndex = requests.findIndex(r => r.ip === ip);
     if (requestIndex === -1) return false;
     
-    // Get admin info
-    const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-    const adminName = currentAdmin ? currentAdmin.name : 'Admin';
+    // Get admin info with safer retrieval
+    let adminName = 'Admin';
+    try {
+        const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin') || '{}');
+        if (currentAdmin && currentAdmin.name) {
+            adminName = sanitizeInput(currentAdmin.name);
+        }
+    } catch (error) {
+        console.error("Error retrieving admin info:", error);
+    }
     
-    // Create new whitelist entry
+    // Create new whitelist entry with validated data
     const newEntry = {
-        name: sanitizeInput(name),
+        name: name,
         ip: ip,
         approved: true,
-        addedBy: sanitizeInput(adminName),
+        addedBy: adminName,
         addedDate: new Date().toISOString()
     };
     
@@ -744,7 +825,7 @@ function approveAccessRequest(ip, name) {
     localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
     
     // Log this approval action
-    logAccessAction(`IP ${ip} (${sanitizeInput(name)}) was added to whitelist`);
+    logAccessAction(`IP ${ip} (${name}) was added to whitelist`);
     
     // Refresh lists
     loadAccessRequests();
@@ -768,28 +849,6 @@ function rejectAccessRequest(ip) {
     
     // Refresh list
     loadAccessRequests();
-    
-    return true;
-}
-
-// Add IP directly to whitelist (for manual entry)
-function addIPToWhitelist(entry) {
-    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-    
-    // Check if IP already exists
-    if (whitelist.some(e => e.ip === entry.ip)) {
-        alert('This IP address is already in the whitelist!');
-        return false;
-    }
-    
-    // Add new entry
-    whitelist.push(entry);
-    
-    // Save changes
-    localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
-    
-    // Log manual addition to whitelist
-    logAccessAction(`IP ${entry.ip} (${entry.name}) was manually added to whitelist`);
     
     return true;
 }
