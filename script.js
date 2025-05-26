@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display user name from session storage if available
     const userDisplayName = document.getElementById('user-display-name');
     if (userDisplayName) {
-        const userName = sessionStorage.getItem('user_name') || '';
+        const userName = sessionStorage.getItem('user_name') || 'User';
         userDisplayName.textContent = userName;
     }
     
