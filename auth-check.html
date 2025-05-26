@@ -49,6 +49,17 @@
             return ipv4Pattern.test(ip);
         }
         
+        // Check for pending requests
+        function hasPendingRequest(ip) {
+            try {
+                const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+                return requests.some(req => req.ip === ip);
+            } catch (error) {
+                console.error("Error checking pending requests:", error);
+                return false;
+            }
+        }
+        
         // Immediately check IP when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Debug flag to track flow
@@ -91,6 +102,9 @@
                     const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
                     const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
                     
+                    // Check for a pending request
+                    const hasPending = hasPendingRequest(ipAddress);
+                    
                     if (isWhitelisted) {
                         // Store info and set access verified flag
                         const userEntry = whitelist.find(entry => entry.ip === ipAddress);
@@ -103,6 +117,10 @@
                         sessionStorage.setItem('last_access_check', new Date().getTime());
                         
                         window.location.href = 'index.html';
+                    } else if (hasPending) {
+                        // Redirect to request page which will show pending status
+                        console.log("IP has pending request, redirecting to request page");
+                        window.location.href = 'request-access.html?pending=true';
                     } else {
                         console.log("IP is not whitelisted, redirecting to request page");
                         // Not whitelisted, redirect to request access

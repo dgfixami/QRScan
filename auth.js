@@ -280,6 +280,234 @@ function isAdminLoggedIn() {
     return isAdmin;
 }
 
+// Enhanced Check for pending requests for this IP
+function checkForPendingRequests(ipAddress) {
+    // Validate IP
+    if (!isValidIPAddress(ipAddress)) {
+        showMessage('request-message', 'Invalid IP address format', 'error');
+        return false;
+    }
+    
+    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+    const existingRequest = requests.find(r => r.ip === ipAddress);
+    
+    if (existingRequest) {
+        // Show pending request message
+        showMessage('request-message', `You already have a pending access request as ${sanitizeInput(existingRequest.name)}`, 'warning');
+        
+        // Format the date for display
+        const requestDate = new Date(existingRequest.requestDate);
+        const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+        
+        // Show status info
+        const statusElement = document.getElementById('request-status');
+        if (statusElement) {
+            // Use DOM methods instead of innerHTML
+            statusElement.textContent = '';
+            
+            const pendingDiv = document.createElement('div');
+            pendingDiv.className = 'pending-request';
+            
+            const datePara = document.createElement('p');
+            datePara.textContent = `Your request was submitted on ${formattedDate}`;
+            
+            const waitPara = document.createElement('p');
+            waitPara.textContent = 'Please wait for an administrator to review your request.';
+            
+            pendingDiv.appendChild(datePara);
+            pendingDiv.appendChild(waitPara);
+            statusElement.appendChild(pendingDiv);
+            
+            statusElement.style.display = 'block';
+            
+            // Add a check status button if it doesn't exist already
+            if (!document.getElementById('check-status-btn')) {
+                const checkButton = document.createElement('button');
+                checkButton.id = 'check-status-btn';
+                checkButton.textContent = 'Check Status Again';
+                checkButton.className = 'retry-button';
+                checkButton.style.marginTop = '15px';
+                checkButton.addEventListener('click', function() {
+                    window.location.reload();
+                });
+                
+                statusElement.appendChild(checkButton);
+            }
+        }
+        
+        // Hide the form completely
+        const requestForm = document.getElementById('request-form');
+        if (requestForm) {
+            requestForm.style.display = 'none';
+        }
+        
+        // Hide loading indicator if present
+        const loadingStatus = document.getElementById('loading-status');
+        if (loadingStatus) {
+            loadingStatus.style.display = 'none';
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
+// Enhanced Check if IP is whitelisted with redirection
+function isIPWhitelisted(ipAddress) {
+    // Sanitize IP input
+    if (!isValidIPAddress(ipAddress)) {
+        return false;
+    }
+    
+    // Check if we have a cached result
+    const cachedResult = sessionStorage.getItem('ip_whitelist_status');
+    if (cachedResult) {
+        try {
+            const parsed = JSON.parse(cachedResult);
+            if (parsed.ip === ipAddress && parsed.timestamp) {
+                // Only use cache for a short time (10 seconds) to ensure revocations are detected quickly
+                const now = new Date().getTime();
+                const cacheTime = parseInt(parsed.timestamp);
+                if (now - cacheTime < 10000) { // 10 seconds
+                    // If on request-access page and IP is whitelisted, redirect to scanner
+                    if (parsed.isWhitelisted && window.location.pathname.includes('request-access.html')) {
+                        console.log("Cached result shows IP is whitelisted, redirecting to scanner");
+                        redirectToScanner(ipAddress);
+                    }
+                    return parsed.isWhitelisted;
+                }
+            }
+        } catch (e) {
+            console.error("Cache parse error:", e);
+        }
+    }
+    
+    // Check whitelist in localStorage
+    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+    const isWhitelisted = whitelist.some(entry => entry.ip === ipAddress && entry.approved);
+    
+    // If on request-access page and IP is whitelisted, redirect to scanner
+    if (isWhitelisted && window.location.pathname.includes('request-access.html')) {
+        console.log("Fresh check shows IP is whitelisted, redirecting to scanner");
+        redirectToScanner(ipAddress);
+    }
+    
+    // Cache the result for improved performance
+    sessionStorage.setItem('ip_whitelist_status', JSON.stringify({
+        ip: ipAddress,
+        isWhitelisted: isWhitelisted,
+        timestamp: new Date().getTime()
+    }));
+    
+    return isWhitelisted;
+}
+
+// New helper function to handle redirection to scanner
+function redirectToScanner(ipAddress) {
+    // Find user info from whitelist
+    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+    const userEntry = whitelist.find(entry => entry.ip === ipAddress);
+    
+    if (userEntry) {
+        // Set session storage for scanner access
+        sessionStorage.setItem('access_verified', 'true');
+        sessionStorage.setItem('access_timestamp', new Date().getTime());
+        sessionStorage.setItem('user_name', userEntry.name || 'User');
+        sessionStorage.setItem('user_ip', ipAddress);
+        
+        // Hide loading indicator if present
+        const loadingStatus = document.getElementById('loading-status');
+        if (loadingStatus) {
+            loadingStatus.style.display = 'none';
+        }
+        
+        // Show approved message
+        showMessage('request-message', "Your device is already approved. Redirecting to scanner...", 'success');
+        
+        // Hide form if present
+        const requestForm = document.getElementById('request-form');
+        if (requestForm) {
+            requestForm.style.display = 'none';
+        }
+        
+        // Redirect to scanner after a short delay
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 1500);
+    }
+}
+
+// Helper function to decode JWT token
+function decodeJwtResponse(token) {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    
+    return JSON.parse(jsonPayload);
+}
+
+// Get the user's IP address using ipify API
+async function getUserIP() {
+    try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        return data.ip;
+    } catch (error) {
+        console.error("Error fetching IP:", error);
+        return "unknown";
+    }
+}
+
+// Initialize the authentication system
+function initializeAuthSystem() {
+    // Check if IP whitelist array exists
+    if (!localStorage.getItem('qrscan_ip_whitelist')) {
+        localStorage.setItem('qrscan_ip_whitelist', JSON.stringify([]));
+    }
+    
+    // Check if access requests array exists
+    if (!localStorage.getItem('qrscan_access_requests')) {
+        localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+    }
+    
+    // Generate CSRF token if not exists
+    if (!sessionStorage.getItem('csrf_token')) {
+        const token = generateCSRFToken();
+        sessionStorage.setItem('csrf_token', token);
+    }
+}
+
+// Generate CSRF token for form submissions
+function generateCSRFToken() {
+    const array = new Uint8Array(16);
+    window.crypto.getRandomValues(array);
+    return Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
+}
+
+// Check if a user is admin and currently logged in
+function isAdminLoggedIn() {
+    const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+    
+    if (!currentAdmin) {
+        return false;
+    }
+    
+    // Check if the user belongs to fixami.com domain using hd property
+    const isAdmin = currentAdmin.hd === 'fixami.com';
+    
+    // Set the admin access flag if they are an admin
+    if (isAdmin) {
+        console.log("Admin detected in isAdminLoggedIn:", currentAdmin.email);
+        sessionStorage.setItem('admin_access', 'true');
+        sessionStorage.setItem('access_verified', 'true');
+    }
+    
+    return isAdmin;
+}
+
 // Check if IP is in the whitelist - added sanitization and improved caching with revocation check
 function isIPWhitelisted(ipAddress) {
     // Sanitize IP input
@@ -449,24 +677,32 @@ function checkForPendingRequests(ipAddress) {
             statusElement.appendChild(pendingDiv);
             
             statusElement.style.display = 'block';
+            
+            // Add a check status button if it doesn't exist already
+            if (!document.getElementById('check-status-btn')) {
+                const checkButton = document.createElement('button');
+                checkButton.id = 'check-status-btn';
+                checkButton.textContent = 'Check Status Again';
+                checkButton.className = 'retry-button';
+                checkButton.style.marginTop = '15px';
+                checkButton.addEventListener('click', function() {
+                    window.location.reload();
+                });
+                
+                statusElement.appendChild(checkButton);
+            }
         }
         
-        // Disable the form
+        // Hide the form completely
         const requestForm = document.getElementById('request-form');
         if (requestForm) {
-            const submitButton = requestForm.querySelector('button[type="submit"]');
-            if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.textContent = 'Request Pending';
-                submitButton.classList.add('disabled-button');
-            }
-            
-            // Prefill and disable name field
-            const nameInput = document.getElementById('request-name');
-            if (nameInput) {
-                nameInput.value = existingRequest.name;
-                nameInput.disabled = true;
-            }
+            requestForm.style.display = 'none';
+        }
+        
+        // Hide loading indicator if present
+        const loadingStatus = document.getElementById('loading-status');
+        if (loadingStatus) {
+            loadingStatus.style.display = 'none';
         }
         
         return true;

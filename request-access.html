@@ -22,8 +22,14 @@
         <!-- New element to display pending request status -->
         <div id="request-status" class="request-status" style="display: none;"></div>
         
+        <!-- Loading spinner while we check status -->
+        <div id="loading-status" class="loading-container" style="height: auto; padding: 20px;">
+            <div class="spinner"></div>
+            <p>Checking your access status...</p>
+        </div>
+        
         <!-- Simplified form with inline submit handler -->
-        <form class="auth-form" id="request-form" onsubmit="return submitRequest(event)">
+        <form class="auth-form" id="request-form" onsubmit="return submitRequest(event)" style="display: none;">
             <input type="text" id="request-name" placeholder="Your Name" 
                    required minlength="2" maxlength="50" 
                    pattern="[A-Za-z\s\-']+" 
@@ -57,39 +63,46 @@
                 showMessage("Your access has been revoked. Please submit a new request if needed.", 'warning');
             }
             
-            // Get user IP and initialize the form
-            fetchUserIP();
+            // Get user IP and initialize the flow
+            fetchUserIPAndCheckStatus();
         });
         
-        // Function to get IP address and initialize
-        async function fetchUserIP() {
+        // Function to get IP address and check status
+        async function fetchUserIPAndCheckStatus() {
             try {
+                // Show loading state while checking
+                document.getElementById('loading-status').style.display = 'flex';
+                document.getElementById('request-form').style.display = 'none';
+                
                 const response = await fetch('https://api.ipify.org?format=json');
                 const data = await response.json();
                 userIP = data.ip;
                 
-                // Display user IP
-                document.getElementById('user-ip').textContent = userIP;
+                console.log("User IP detected:", userIP);
                 
-                // Check if IP is already whitelisted
+                // First check if IP is already whitelisted
                 if (isWhitelisted(userIP)) {
                     console.log("IP is already whitelisted");
                     handleWhitelistedIP();
                     return;
                 }
                 
-                // Check if request is already pending
+                // Then check if request is already pending
                 if (hasPendingRequest(userIP)) {
                     console.log("IP has pending request");
                     handlePendingRequest();
                     return;
                 }
                 
-                console.log("Form ready for submission");
+                // If neither whitelisted nor pending, show the request form
+                console.log("No existing status found, showing request form");
+                document.getElementById('loading-status').style.display = 'none';
+                document.getElementById('request-form').style.display = 'block';
                 
             } catch (error) {
                 console.error("Error fetching IP address:", error);
-                document.getElementById('user-ip').textContent = "Error";
+                document.getElementById('loading-status').style.display = 'none';
+                document.getElementById('request-form').style.display = 'block';
                 showMessage("Error identifying your device. Please try again later.", 'error');
             }
         }
@@ -209,18 +222,19 @@
             const entry = whitelist.find(e => e.ip === userIP);
             
             if (entry) {
+                // Hide loading indicator
+                document.getElementById('loading-status').style.display = 'none';
+                
+                // Show approved message
+                showMessage("Your device is already approved. Redirecting to scanner...", 'success');
+                
                 // Set session storage for scanner access
                 sessionStorage.setItem('access_verified', 'true');
                 sessionStorage.setItem('access_timestamp', new Date().getTime());
                 sessionStorage.setItem('user_name', entry.name || 'User');
+                sessionStorage.setItem('user_ip', userIP);
                 
-                // Show approved message and redirect
-                showMessage("Your device is already approved. Redirecting to scanner...", 'success');
-                
-                // Disable form while redirecting
-                disableForm();
-                
-                // Redirect to scanner after delay
+                // Redirect to scanner after a short delay to show the message
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 1500);
@@ -244,17 +258,31 @@
             const request = requests.find(req => req.ip === userIP);
             
             if (request) {
+                // Hide loading indicator
+                document.getElementById('loading-status').style.display = 'none';
+                
                 // Show pending message
                 showMessage(`You already have a pending access request as ${sanitizeText(request.name)}`, 'warning');
                 
                 // Show pending status
                 showPendingRequestStatus(request.name);
                 
-                // Disable form
-                disableForm();
+                // Hide the request form completely since it's not needed
+                document.getElementById('request-form').style.display = 'none';
                 
-                // Prefill name field
-                document.getElementById('request-name').value = request.name;
+                // Add a check-status button that refreshes the page
+                const statusElement = document.getElementById('request-status');
+                if (statusElement) {
+                    const checkButton = document.createElement('button');
+                    checkButton.textContent = 'Check Status Again';
+                    checkButton.className = 'retry-button';
+                    checkButton.style.marginTop = '15px';
+                    checkButton.addEventListener('click', function() {
+                        window.location.reload();
+                    });
+                    
+                    statusElement.appendChild(checkButton);
+                }
             }
         }
         
@@ -365,13 +393,7 @@
         function disableForm() {
             const form = document.getElementById('request-form');
             if (form) {
-                const nameInput = document.getElementById('request-name');
-                const submitBtn = document.getElementById('submit-btn');
-                
-                nameInput.disabled = true;
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Request Pending';
-                submitBtn.className += ' disabled-button';
+                form.style.display = 'none'; // Hide the form completely
             }
         }
         
@@ -406,5 +428,30 @@
             });
         }
     </script>
+    
+    <style>
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </body>
 </html>
