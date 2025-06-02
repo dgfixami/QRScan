@@ -371,23 +371,6 @@
             // Always enable the clear button - it will always attempt to clear requests
             document.getElementById('clear-all-requests').style.display = 'inline-block';
             
-            // Set a safety timeout to ensure UI is updated even if request doesn't complete
-            const safetyTimeout = setTimeout(() => {
-                console.log("Clear requests safety timeout triggered");
-                // Clean up local storage anyway
-                localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
-                sessionStorage.removeItem('cached_access_requests');
-                
-                // Log the action
-                logAccessAction('Force cleared all pending requests (server timed out)');
-                
-                // Update UI
-                requestList.innerHTML = '<p class="warning-message">Server took too long to respond, but local requests were cleared.</p>';
-                setTimeout(() => {
-                    loadAccessRequests(true); // Force refresh from server
-                }, 2000);
-            }, 10000); // 10 second timeout
-            
             // Send to server
             fetch(scriptUrl, {
                 method: 'POST',
@@ -398,9 +381,6 @@
                 mode: 'no-cors' // Required for Google Apps Script web apps
             })
             .then(() => {
-                // Clear the safety timeout since we got a response
-                clearTimeout(safetyTimeout);
-                
                 // Handle local storage cleanup as well
                 const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
                 localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
@@ -418,9 +398,6 @@
                 }, 2000);
             })
             .catch(error => {
-                // Clear the safety timeout since we got a response
-                clearTimeout(safetyTimeout);
-                
                 console.error('Error clearing requests:', error);
                 
                 // Still clear local requests
@@ -472,74 +449,65 @@
         
         .log-action {
             font-size: 14px;
-        }   margin-bottom: 3px;
+            margin-bottom: 3px;
         }
+        
+        .log-admin {
+            font-size: 12px;
+            font-style: italic;
+            color: #666;
+        }
+        
+        /* New styles for admin actions and button states */
+        .admin-actions {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        .admin-btn.danger {
+            background-color: #d32f2f;
+            color: white;
+        }
+        
+        .admin-btn.danger:hover {
+            background-color: #b71c1c;
+        }
+        
         .loading-message {
             text-align: center;
-            padding: 15px;x;
-            color: #666;italic;
+            padding: 15px;
+            color: #666;
             font-style: italic;
         }
         
-        .success-message {admin actions and button states */
+        .success-message {
             text-align: center;
-            padding: 15px; 15px;
+            padding: 15px;
             color: #388e3c;
             background-color: #e8f5e9;
             border-radius: 4px;
             border-left: 3px solid #388e3c;
-        }admin-btn.danger {
-            background-color: #d32f2f;
-        .error-message {;
+        }
+        
+        .error-message {
             text-align: center;
             padding: 15px;
-            color: #d32f2f;over {
+            color: #d32f2f;
             background-color: #ffebee;
             border-radius: 4px;
             border-left: 3px solid #d32f2f;
-        }loading-message {
-            text-align: center;
-        .warning-message {
-            text-align: center;
-            padding: 15px;
-            color: #856404;
-            background-color: #fff3cd;
-            border-radius: 4px;success-message {
-            border-left: 3px solid #ffc107;    text-align: center;
         }
         
-        /* Add styles for the refresh button */   background-color: #e8f5e9;
-        .admin-btn.edit {    border-radius: 4px;
+        /* Add styles for the refresh button */
+        .admin-btn.edit {
             background-color: #2196F3;
             color: white;
             margin-left: 10px;
         }
         
-        .admin-btn.edit:hover {   padding: 15px;
-            background-color: #0b7dda;    color: #d32f2f;
-        }
-        
-        /* Make both buttons in admin-actions display side by side */solid #d32f2f;
-        .admin-actions {
-            margin-bottom: 15px;
-            display: flex;n */
-            justify-content: flex-end;
-        }: #2196F3;
-           color: white;
-        /* Add a style for the force-cleanup message */margin-left: 10px;
-        .force-cleanup-message { }
-            margin-top: 10px; 
-            padding: 8px;        .admin-btn.edit:hover {
-
-
-
-
-
-
-
-
-
-</html></body>    </style>        }            font-size: 14px;            color: #856404;            border-left: 3px solid #ffc107;            background-color: #fff3cd;            background-color: #0b7dda;
+        .admin-btn.edit:hover {
+            background-color: #0b7dda;
         }
         
         /* Make both buttons in admin-actions display side by side */
