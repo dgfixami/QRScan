@@ -58,6 +58,9 @@
             <div class="section-description">
                 <p>Review access requests from users. Each request is linked to a specific IP address.</p>
             </div>
+            <div class="admin-actions">
+                <button id="clear-all-requests" class="admin-btn danger">Clear All Pending Requests</button>
+            </div>
             <div id="request-list">
                 <!-- Request items will be added here dynamically -->
                 <p class="no-items-message">No pending access requests.</p>
@@ -183,7 +186,15 @@
                 // Don't redirect on error, just log it and continue
             }
             
-            // ...existing code...
+            // Add event listener for the clear all requests button
+            const clearAllRequestsBtn = document.getElementById('clear-all-requests');
+            if (clearAllRequestsBtn) {
+                clearAllRequestsBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to clear all pending access requests? This action cannot be undone.')) {
+                        clearAllPendingRequests();
+                    }
+                });
+            }
         });
         
         // Function to load access log
@@ -314,6 +325,76 @@
                 }
             });
         }
+        
+        // Function to clear all pending requests
+        function clearAllPendingRequests() {
+            // Get the script URL
+            const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+            
+            // Create the admin name for logging
+            let adminName = 'Admin';
+            try {
+                const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
+                if (currentAdmin && currentAdmin.name) {
+                    adminName = currentAdmin.name;
+                }
+            } catch (error) {
+                console.error('Error getting admin name:', error);
+            }
+            
+            // Create the request payload
+            const requestData = {
+                action: "clearAllRequests",
+                admin: adminName
+            };
+            
+            // Show loading state
+            const requestList = document.getElementById('request-list');
+            requestList.innerHTML = '<p class="loading-message">Clearing all requests...</p>';
+            
+            // Send to server
+            fetch(scriptUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData),
+                mode: 'no-cors' // Required for Google Apps Script web apps
+            })
+            .then(() => {
+                // Handle local storage cleanup as well
+                const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+                if (requests.length > 0) {
+                    localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+                    
+                    // Log the action
+                    logAccessAction(`All pending access requests (${requests.length}) were cleared`);
+                } else {
+                    logAccessAction('Cleared all pending access requests (none found locally)');
+                }
+                
+                // Show success message and refresh the list
+                requestList.innerHTML = '<p class="success-message">All pending requests have been cleared!</p>';
+                setTimeout(() => {
+                    loadAccessRequests();
+                }, 2000);
+            })
+            .catch(error => {
+                console.error('Error clearing requests:', error);
+                
+                // Still clear local requests
+                localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+                
+                // Log error
+                logAccessAction('Error clearing requests on server, but local requests were cleared');
+                
+                // Show error and refresh list
+                requestList.innerHTML = '<p class="error-message">Error clearing requests on server. Local requests have been cleared.</p>';
+                setTimeout(() => {
+                    loadAccessRequests();
+                }, 3000);
+            });
+        }
     </script>
     
     <script src="auth.js"></script>
@@ -356,6 +437,47 @@
             font-size: 12px;
             font-style: italic;
             color: #666;
+        }
+        
+        /* New styles for admin actions and button states */
+        .admin-actions {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        .admin-btn.danger {
+            background-color: #d32f2f;
+            color: white;
+        }
+        
+        .admin-btn.danger:hover {
+            background-color: #b71c1c;
+        }
+        
+        .loading-message {
+            text-align: center;
+            padding: 15px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .success-message {
+            text-align: center;
+            padding: 15px;
+            color: #388e3c;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            border-left: 3px solid #388e3c;
+        }
+        
+        .error-message {
+            text-align: center;
+            padding: 15px;
+            color: #d32f2f;
+            background-color: #ffebee;
+            border-radius: 4px;
+            border-left: 3px solid #d32f2f;
         }
     </style>
 </body>

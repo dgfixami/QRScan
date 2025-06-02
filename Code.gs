@@ -105,6 +105,8 @@ function doPost(e) {
         return approveAccessRequest(data);
       } else if (data.action === "rejectRequest") {
         return rejectAccessRequest(data);
+      } else if (data.action === "clearAllRequests") {
+        return clearAllRequests(data);
       }
     }
     
@@ -345,6 +347,83 @@ function rejectAccessRequest(data) {
   } catch (error) {
     Logger.log("Error rejecting access request: " + error.toString());
     return createResponse(false, "Error rejecting request: " + error.toString());
+  }
+}
+
+// New function to clear all pending requests
+function clearAllRequests(data) {
+  try {
+    // Verify required admin data 
+    const adminName = data.admin || "Admin";
+    
+    // Get the requests sheet
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let requestsSheet = spreadsheet.getSheetByName("AccessRequests");
+    
+    if (!requestsSheet) {
+      // No sheet exists, nothing to clear
+      return createResponse(true, "No requests to clear");
+    }
+    
+    // Get all the data and identify which rows have pending requests
+    const dataRange = requestsSheet.getDataRange();
+    const values = dataRange.getValues();
+    const pendingRows = [];
+    let pendingCount = 0;
+    
+    // Find all rows with "Pending" status, skipping header row
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][3] === "Pending") {  // Column D is Status
+        pendingRows.push(i + 1);  // +1 for 1-based indexing
+        pendingCount++;
+      }
+    }
+    
+    // Create archive for cleared requests if it doesn't exist
+    let archivedSheet = spreadsheet.getSheetByName("ArchivedRequests");
+    if (!archivedSheet) {
+      archivedSheet = spreadsheet.insertSheet("ArchivedRequests");
+      archivedSheet.appendRow(["Timestamp", "Name", "IP Address", "Status", "Cleared By", "Cleared At"]);
+    }
+    
+    // Archive each pending request before clearing
+    const now = new Date();
+    const timestamp = Utilities.formatDate(now, spreadsheet.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
+    
+    pendingRows.forEach(rowIndex => {
+      // Get the row data to archive
+      const rowData = requestsSheet.getRange(rowIndex, 1, 1, 4).getValues()[0];
+      
+      // Add to archive with admin name and timestamp
+      archivedSheet.appendRow([
+        rowData[0],        // Timestamp
+        rowData[1],        // Name
+        rowData[2],        // IP Address
+        "Cleared",         // New status
+        adminName,         // Admin who cleared
+        timestamp          // When cleared
+      ]);
+      
+      // Update the status in the original sheet to "Cleared"
+      requestsSheet.getRange(rowIndex, 4).setValue("Cleared");
+    });
+    
+    // Log this action
+    const logSheet = spreadsheet.getSheetByName("ActivityLog") || spreadsheet.insertSheet("ActivityLog");
+    if (logSheet.getLastRow() === 0) {
+      logSheet.appendRow(["Timestamp", "Action", "Admin"]);
+    }
+    
+    logSheet.appendRow([
+      timestamp,
+      `Cleared all pending access requests (${pendingCount} requests)`,
+      adminName
+    ]);
+    
+    return createResponse(true, `Successfully cleared ${pendingCount} pending requests`);
+  } catch (error) {
+    Logger.log("Error clearing requests: " + error.toString());
+    return createResponse(false, "Error clearing requests: " + error.toString());
   }
 }
 

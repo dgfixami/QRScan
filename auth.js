@@ -935,12 +935,27 @@ function loadAccessRequests() {
 
 // Helper function to display access requests
 function displayAccessRequests(requests, requestList) {
+    // Clear any special messages that might be showing
+    requestList.innerHTML = '';
+    
     if (requests.length === 0) {
         const noItemsMsg = document.createElement('p');
         noItemsMsg.className = 'no-items-message';
         noItemsMsg.textContent = 'No pending access requests.';
         requestList.appendChild(noItemsMsg);
+        
+        // Hide the clear all button if there are no requests
+        const clearAllBtn = document.getElementById('clear-all-requests');
+        if (clearAllBtn) {
+            clearAllBtn.style.display = 'none';
+        }
         return;
+    }
+    
+    // Show the clear all button since we have requests
+    const clearAllBtn = document.getElementById('clear-all-requests');
+    if (clearAllBtn) {
+        clearAllBtn.style.display = 'block';
     }
     
     // Add each request to the list
