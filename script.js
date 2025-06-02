@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentMode = 'Check-in';
     let currentCameraIndex = 0;
     let cameras = [];
+    let cameraInitAttempts = 0;
+    const MAX_INIT_ATTEMPTS = 3;
     
     // New variable to track if a scan is in process
     let isScanning = false;
@@ -800,124 +802,52 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     setTimeout(() => {
-        initializeScanner();
+        initializeCameras();
     }, 500);
     
-    function initializeScanner() {
+    async function initializeCameras() {
         try {
-            logToPage('Initializing QR scanner...');
+            logToPage('Getting available cameras...');
             
-            html5QrCode = new Html5Qrcode("reader");
-            
-            Html5Qrcode.getCameras()
-                .then(devices => {
-                    if (devices && devices.length) {
-                        cameras = devices;
-                        logToPage(`Found ${devices.length} camera(s)`);
-                        
-                        // Try to use the back camera by default
-                        const backCamera = devices.find(camera => 
-                            /(back|rear|environment)/i.test(camera.label));
-                        
-                        if (backCamera) {
-                            currentCameraIndex = devices.indexOf(backCamera);
-                            logToPage('Back camera selected');
-                        }
-                        
-                        // Start scanner with selected camera
-                        startCameraScanner(devices[currentCameraIndex].id);
-                        
-                        // Add camera switch button if multiple cameras
-                        if (devices.length > 1 && !document.getElementById('switch-camera')) {
-                            addCameraSwitchButton();
-                        }
-                    } else {
-                        // If no cameras found through getCameras, try direct environment mode
-                        logToPage('No camera devices found, trying environment camera');
-                        startCameraScanner({ facingMode: "environment" });
+            Html5Qrcode.getCameras().then(devices => {
+                cameras = devices;
+                logToPage(`Found ${devices.length} camera(s)`);
+                console.log("Available cameras:", devices);
+                
+                if (devices && devices.length > 0) {
+                    const backCamera = devices.find(camera => 
+                        /(back|rear|environment)/i.test(camera.label));
+                    
+                    if (backCamera) {
+                        currentCameraIndex = devices.indexOf(backCamera);
+                        logToPage('Back camera found, using it by default');
                     }
-                })
-                .catch(err => {
-                    console.error("Error getting cameras:", err);
-                    logToPage('Error detecting cameras, trying default camera');
-                    startCameraScanner({ facingMode: "environment" });
-                });
+                    
+                    if (devices[currentCameraIndex] && 
+                        typeof devices[currentCameraIndex].id === 'string' && 
+                        devices[currentCameraIndex].id.length > 0) {
+                        
+                        startScanner(devices[currentCameraIndex].id);
+                    } else {
+                        logToPage('Using environment facing camera as fallback');
+                        startFallbackScanner();
+                    }
+                    
+                    if (devices.length > 1 && !document.getElementById('switch-camera')) {
+                        addCameraSwitchButton();
+                    }
+                } else {
+                    logToPage('No cameras detected, trying alternative method', 'warning');
+                    startFallbackScanner();
+                }
+            }).catch(err => {
+                logToPage(`Error getting cameras: ${err.message}`, 'error');
+                startFallbackScanner();
+            });
         } catch (error) {
-            console.error("Scanner initialization error:", error);
             logToPage(`Camera initialization error: ${error.message}`, 'error');
-            // Try one last approach - direct environment facing camera
-            startCameraScanner({ facingMode: "environment" });
+            startFallbackScanner();
         }
-    }
-    
-    function startCameraScanner(cameraIdOrConfig) {
-        // Stop any existing scanner first
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.stop()
-                .then(() => startScanner(cameraIdOrConfig))
-                .catch(err => {
-                    console.error("Error stopping scanner:", err);
-                    html5QrCode = new Html5Qrcode("reader");
-                    startScanner(cameraIdOrConfig);
-                });
-        } else {
-            startScanner(cameraIdOrConfig);
-        }
-    }
-    
-    function startScanner(cameraIdOrConfig) {
-        // Clear any previous error messages
-        codeValue.textContent = "-";
-        codeValue.style.color = "";
-        
-        // Configuration for scanner
-        const config = {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
-        };
-        
-        logToPage(`Starting scanner with camera: ${typeof cameraIdOrConfig === 'string' ? cameraIdOrConfig : 'environment'}`);
-        
-        html5QrCode.start(
-            cameraIdOrConfig, 
-            config,
-            qrCodeSuccessCallback,
-            (errorMessage) => {
-                // Only log significant errors, not the routine scanning messages
-                if (!errorMessage.includes("No QR code found") && 
-                    !errorMessage.includes("No MultiFormat Readers") &&
-                    !errorMessage.includes("QR code parse error")) {
-                    console.log("QR Error:", errorMessage);
-                }
-            }
-        )
-        .then(() => {
-            logToPage('Camera started successfully', 'success');
-            
-            // Add flash element if not exists
-            if (!document.querySelector('.camera-flash')) {
-                const flash = document.createElement('div');
-                flash.className = 'camera-flash';
-                reader.appendChild(flash);
-            }
-        })
-        .catch(err => {
-            console.error("Failed to start camera:", err);
-            logToPage(`Camera start error: ${err.message}`, 'error');
-            
-            // If permission denied, show helpful message
-            if (err.toString().includes('NotAllowedError')) {
-                codeValue.textContent = "Camera permission denied";
-                codeValue.style.color = "red";
-            } else if (err.toString().includes('NotFoundError')) {
-                // Try environment mode as last resort
-                if (typeof cameraIdOrConfig === 'string') {
-                    logToPage('Camera not found, trying environment camera');
-                    startCameraScanner({ facingMode: "environment" });
-                }
-            }
-        });
     }
     
     function addCameraSwitchButton() {
@@ -926,33 +856,190 @@ document.addEventListener('DOMContentLoaded', function() {
         switchBtn.className = 'retry-button';
         switchBtn.textContent = 'Switch Camera';
         switchBtn.addEventListener('click', () => {
-            if (cameras.length > 1) {
-                currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-                logToPage(`Switching to camera: ${cameras[currentCameraIndex].label || `Camera ${currentCameraIndex + 1}`}`);
-                startCameraScanner(cameras[currentCameraIndex].id);
-            }
+            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+            logToPage(`Switching to camera: ${cameras[currentCameraIndex].label || `Camera ${currentCameraIndex + 1}`}`);
+            startScanner(cameras[currentCameraIndex].id);
         });
         
-        const readerElement = document.getElementById('reader');
-        if (readerElement && readerElement.parentNode) {
-            readerElement.parentNode.insertBefore(switchBtn, readerElement.nextSibling);
+        reader.parentNode.insertBefore(switchBtn, reader.nextSibling);
+    }
+    
+    function startScanner(cameraId) {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+                initScanner(cameraId);
+            }).catch(err => {
+                logToPage(`Error stopping current scanner: ${err.message}`, 'error');
+                html5QrCode = null;
+                initScanner(cameraId);
+            });
+        } else {
+            initScanner(cameraId);
         }
     }
     
-    // Critical: Handle page visibility changes to restart camera when needed
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            if (html5QrCode && !html5QrCode.isScanning) {
-                logToPage('Page visibility restored, restarting camera', 'info');
-                initializeScanner();
+    function initScanner(cameraId) {
+        try {
+            logToPage(`Initializing scanner with camera ID: ${cameraId}`);
+            
+            html5QrCode = new Html5Qrcode("reader");
+            
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
+            };
+            
+            html5QrCode.start(
+                cameraId, 
+                config,
+                qrCodeSuccessCallback,
+                qrCodeErrorCallback
+            ).then(() => {
+                logToPage('Camera started successfully', 'success');
+                cameraInitAttempts = 0;
+                
+                let flash = document.querySelector('.camera-flash');
+                if (!flash) {
+                    flash = document.createElement('div');
+                    flash.className = 'camera-flash';
+                    reader.appendChild(flash);
+                }
+                
+                const existingRetryBtn = document.getElementById('retry-camera-btn');
+                if (existingRetryBtn) {
+                    existingRetryBtn.remove();
+                }
+                
+            }).catch(err => {
+                logToPage(`Failed to start camera: ${err.message}`, 'error');
+                
+                if (cameraInitAttempts < MAX_INIT_ATTEMPTS) {
+                    cameraInitAttempts++;
+                    logToPage('Trying alternative camera method...', 'info');
+                    startFallbackScanner();
+                } else {
+                    showError(`Camera start failed after ${MAX_INIT_ATTEMPTS} attempts`);
+                    addRetryButton();
+                }
+            });
+        } catch (error) {
+            logToPage(`Scanner initialization error: ${error.message}`, 'error');
+            addRetryButton();
+        }
+    }
+    
+    function startFallbackScanner() {
+        try {
+            logToPage('Using fallback camera method');
+            
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().catch(err => 
+                    logToPage(`Error stopping previous scanner: ${err.message}`, 'warning')
+                );
             }
+            
+            html5QrCode = new Html5Qrcode("reader");
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                },
+                qrCodeSuccessCallback,
+                qrCodeErrorCallback
+            ).then(() => {
+                logToPage('Fallback camera method succeeded', 'success');
+                cameraInitAttempts = 0;
+                
+                let flash = document.querySelector('.camera-flash');
+                if (!flash) {
+                    flash = document.createElement('div');
+                    flash.className = 'camera-flash';
+                    reader.appendChild(flash);
+                }
+                
+            }).catch(err => {
+                logToPage(`Fallback camera method failed: ${err.message}`, 'error');
+                showError("Could not access camera. Please ensure camera permissions are granted.");
+                addRetryButton();
+            });
+        } catch (error) {
+            logToPage(`Fallback scanner error: ${error.message}`, 'error');
+            showError("Camera initialization failed completely. Please try refreshing the page.");
+            addRetryButton();
+        }
+    }
+    
+    function addRetryButton() {
+        const existingRetryBtn = document.getElementById('retry-camera-btn');
+        if (existingRetryBtn) {
+            existingRetryBtn.remove();
+        }
+        
+        const retryBtn = document.createElement('button');
+        retryBtn.id = 'retry-camera-btn';
+        retryBtn.className = 'retry-button';
+        retryBtn.textContent = 'Retry Camera';
+        retryBtn.addEventListener('click', () => {
+            logToPage('Manual camera retry requested', 'info');
+            cameraInitAttempts = 0;
+            initializeCameras();
+        });
+        
+        reader.parentNode.insertBefore(retryBtn, reader);
+    }
+    
+    function qrCodeErrorCallback(errorMessage) {
+        if (!errorMessage) return;
+        
+        if (errorMessage.includes("No QR code found") || 
+            errorMessage.includes("No MultiFormat Readers") ||
+            errorMessage.includes("QR code parse error") ||
+            errorMessage.includes("no MultiFormat") ||
+            errorMessage.toLowerCase().includes("parse error")) {
+            return;
+        }
+        
+        if (errorMessage.includes("Unable to start scanning") || 
+            errorMessage.includes("stream ended unexpectedly")) {
+            logToPage(`Camera stream error detected, attempting recovery...`, 'error');
+            setTimeout(() => {
+                if (cameras.length > 0) {
+                    startScanner(cameras[currentCameraIndex].id);
+                } else {
+                    startFallbackScanner();
+                }
+            }, 2000);
+        } else {
+            logToPage(`QR scan error: ${errorMessage}`, 'error');
+        }
+    }
+    
+    function showError(message) {
+        codeValue.textContent = "Camera error - check permissions";
+        codeValue.style.color = "red";
+        logToPage(message, 'error');
+    }
+    
+    window.addEventListener('beforeunload', () => {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(err => logToPage(`Error stopping camera: ${err.message}`, 'error'));
         }
     });
     
-    // Handle cleanup when page is unloaded
-    window.addEventListener('beforeunload', () => {
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.stop().catch(err => console.error("Error stopping camera:", err));
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            if (html5QrCode && !html5QrCode.isScanning) {
+                logToPage('Page visibility restored, checking camera...', 'info');
+                if (cameras.length > 0) {
+                    startScanner(cameras[currentCameraIndex].id);
+                } else {
+                    startFallbackScanner();
+                }
+            }
         }
     });
     
