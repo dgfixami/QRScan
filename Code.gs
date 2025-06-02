@@ -86,15 +86,38 @@ function handleLookup(code) {
   }
 }
 
-// Define the doPost function to handle POST requests with new column structure
+// New functions to handle access requests
 function doPost(e) {
   try {
-    // Parse the incoming data
-    const data = JSON.parse(e.postData.contents);
+    // Check what type of request this is
+    if (e.postData && e.postData.contents) {
+      const data = JSON.parse(e.postData.contents);
+      
+      // Handle different types of requests
+      if (data.action === "scan") {
+        // Original scan functionality
+        return handleScanPost(data);
+      } else if (data.action === "accessRequest") {
+        return handleAccessRequest(data);
+      } else if (data.action === "fetchRequests") {
+        return fetchAccessRequests();
+      } else if (data.action === "approveRequest") {
+        return approveAccessRequest(data);
+      } else if (data.action === "rejectRequest") {
+        return rejectAccessRequest(data);
+      }
+    }
     
-    // Log the received data for debugging
-    Logger.log("Received data: " + JSON.stringify(data));
-    
+    return createResponse(false, "Invalid request format");
+  } catch (error) {
+    Logger.log("Error in doPost: " + error.toString());
+    return createResponse(false, "Error processing request: " + error.toString());
+  }
+}
+
+// Handle the original scan post functionality
+function handleScanPost(data) {
+  try {
     // Validate required data
     if (!data.code) {
       return createResponse(false, "Missing QR code data");
@@ -181,6 +204,147 @@ function doPost(e) {
   } catch (error) {
     Logger.log("Error: " + error.toString());
     return createResponse(false, "Error processing request: " + error.toString());
+  }
+}
+
+// Handle new access request
+function handleAccessRequest(data) {
+  try {
+    // Validate the request data
+    if (!data.name || !data.ip) {
+      return createResponse(false, "Missing required fields");
+    }
+    
+    // Get or create the access requests sheet
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let requestsSheet = spreadsheet.getSheetByName("AccessRequests");
+    
+    if (!requestsSheet) {
+      requestsSheet = spreadsheet.insertSheet("AccessRequests");
+      requestsSheet.appendRow(["Timestamp", "Name", "IP Address", "Status"]);
+    }
+    
+    // Check if there's already a pending request for this IP
+    const ipColumn = 3;  // Column C contains IP addresses
+    const dataRange = requestsSheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    for (let i = 1; i < values.length; i++) {  // Skip header row
+      if (values[i][ipColumn-1] === data.ip && values[i][3] === "Pending") {
+        // Request already exists for this IP
+        return createResponse(false, "A pending request already exists for this IP address");
+      }
+    }
+    
+    // Current timestamp
+    const now = new Date();
+    const timestamp = Utilities.formatDate(now, spreadsheet.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
+    
+    // Add the new request
+    requestsSheet.appendRow([timestamp, data.name, data.ip, "Pending"]);
+    
+    return createResponse(true, "Access request submitted successfully");
+  } catch (error) {
+    Logger.log("Error handling access request: " + error.toString());
+    return createResponse(false, "Error processing access request: " + error.toString());
+  }
+}
+
+// Fetch all pending access requests
+function fetchAccessRequests() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let requestsSheet = spreadsheet.getSheetByName("AccessRequests");
+    
+    if (!requestsSheet) {
+      // No requests sheet means no requests
+      return createResponse(true, "No access requests found", []);
+    }
+    
+    // Get all the data from the sheet
+    const dataRange = requestsSheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    // Skip header row and convert to objects
+    const requests = [];
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][3] === "Pending") {  // Only include pending requests
+        requests.push({
+          timestamp: values[i][0],
+          name: values[i][1],
+          ip: values[i][2],
+          status: values[i][3],
+          row: i + 1  // +1 because arrays are 0-indexed but sheet rows are 1-indexed
+        });
+      }
+    }
+    
+    return createResponse(true, "Access requests retrieved", requests);
+  } catch (error) {
+    Logger.log("Error fetching access requests: " + error.toString());
+    return createResponse(false, "Error retrieving access requests: " + error.toString());
+  }
+}
+
+// Approve an access request
+function approveAccessRequest(data) {
+  try {
+    if (!data.ip || !data.name || !data.row) {
+      return createResponse(false, "Missing required fields");
+    }
+    
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let requestsSheet = spreadsheet.getSheetByName("AccessRequests");
+    
+    if (!requestsSheet) {
+      return createResponse(false, "Requests sheet not found");
+    }
+    
+    // Update the status to "Approved"
+    requestsSheet.getRange(data.row, 4).setValue("Approved"); // Column D is Status
+    
+    // Get current timestamp for the log
+    const now = new Date();
+    const timestamp = Utilities.formatDate(now, spreadsheet.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
+    
+    // Add to IP whitelist sheet or create it if it doesn't exist
+    let whitelistSheet = spreadsheet.getSheetByName("IPWhitelist");
+    if (!whitelistSheet) {
+      whitelistSheet = spreadsheet.insertSheet("IPWhitelist");
+      whitelistSheet.appendRow(["Timestamp", "Name", "IP Address", "Added By", "Status"]);
+    }
+    
+    // Add the approved IP to the whitelist
+    whitelistSheet.appendRow([timestamp, data.name, data.ip, data.admin || "Admin", "Active"]);
+    
+    return createResponse(true, "Access request approved successfully");
+  } catch (error) {
+    Logger.log("Error approving access request: " + error.toString());
+    return createResponse(false, "Error approving request: " + error.toString());
+  }
+}
+
+// Reject an access request
+function rejectAccessRequest(data) {
+  try {
+    if (!data.row) {
+      return createResponse(false, "Missing required fields");
+    }
+    
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let requestsSheet = spreadsheet.getSheetByName("AccessRequests");
+    
+    if (!requestsSheet) {
+      return createResponse(false, "Requests sheet not found");
+    }
+    
+    // Update the status to "Rejected"
+    requestsSheet.getRange(data.row, 4).setValue("Rejected"); // Column D is Status
+    
+    return createResponse(true, "Access request rejected successfully");
+  } catch (error) {
+    Logger.log("Error rejecting access request: " + error.toString());
+    return createResponse(false, "Error rejecting request: " + error.toString());
   }
 }
 

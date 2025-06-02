@@ -26,6 +26,9 @@
         
         <!-- Simplified form with inline submit handler -->
         <form class="auth-form" id="request-form" onsubmit="return submitRequest(event)" style="display: none;">
+            <!-- Add CSRF token field -->
+            <input type="hidden" id="csrf_token" name="csrf_token">
+            
             <input type="text" id="request-name" placeholder="Your Name" 
                    required minlength="2" maxlength="50" 
                    pattern="[A-Za-z\s\-']+" 
@@ -51,6 +54,11 @@
             sessionStorage.removeItem('access_verified');
             sessionStorage.removeItem('access_timestamp');
             
+            // Generate and set CSRF token
+            const csrfToken = generateCSRFToken();
+            sessionStorage.setItem('csrf_token', csrfToken);
+            document.getElementById('csrf_token').value = csrfToken;
+            
             // Get the current URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             
@@ -62,6 +70,13 @@
             // Get user IP and initialize the flow
             fetchUserIPAndCheckStatus();
         });
+        
+        // Helper function to generate CSRF token
+        function generateCSRFToken() {
+            const array = new Uint8Array(16);
+            window.crypto.getRandomValues(array);
+            return Array.from(array, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
+        }
         
         // Function to get IP address and check status
         async function fetchUserIPAndCheckStatus() {

@@ -711,7 +711,7 @@ function checkForPendingRequests(ipAddress) {
     return false;
 }
 
-// Submit access request with name and IP
+// Submit access request with name and IP - updated to use Google Apps Script
 function submitAccessRequest(name, ipAddress) {
     // Input validation
     if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -751,19 +751,43 @@ function submitAccessRequest(name, ipAddress) {
     // Update rate limiting timestamp
     sessionStorage.setItem('last_request_time', now.toString());
     
-    // Check if request already exists for this IP
-    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
-    const existingRequest = requests.find(r => r.ip === ipAddress);
+    // First, store the request locally as fallback
+    storeLocalAccessRequest(name, ipAddress);
     
-    if (existingRequest) {
-        showMessage('request-message', `An access request is already pending for this device under the name: ${sanitizeInput(existingRequest.name)}`, 'error');
+    // Create payload for API
+    const requestData = {
+        action: "accessRequest",
+        name: sanitizeInput(name),
+        ip: ipAddress,
+        timestamp: new Date().toISOString()
+    };
+    
+    // Get reference to the script URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+    
+    // Show pending message
+    showMessage('request-message', 'Submitting access request...', 'info');
+    
+    // Send request to Google Apps Script
+    fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+        mode: 'no-cors' // Required for Google Apps Script web apps
+    })
+    .then(() => {
+        // Due to no-cors mode, we can't check the actual response
+        // Just show success and update UI
+        showMessage('request-message', 'Your access request has been submitted. Please wait for admin approval.', 'success');
         
-        // Show a "check status" message with timestamp
-        const requestDate = new Date(existingRequest.requestDate);
-        const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
-        
+        // Update UI to show pending state
         const statusElement = document.getElementById('request-status');
         if (statusElement) {
+            const requestDate = new Date();
+            const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+            
             // Use DOM methods instead of innerHTML
             statusElement.textContent = '';
             
@@ -771,7 +795,7 @@ function submitAccessRequest(name, ipAddress) {
             pendingDiv.className = 'pending-request';
             
             const datePara = document.createElement('p');
-            datePara.textContent = `You already have a pending request submitted on ${formattedDate}`;
+            datePara.textContent = `Your request was submitted on ${formattedDate}`;
             
             const waitPara = document.createElement('p');
             waitPara.textContent = 'Please wait for an administrator to review your request.';
@@ -793,78 +817,124 @@ function submitAccessRequest(name, ipAddress) {
                 submitButton.classList.add('disabled-button');
             }
             
-            // Optionally disable the input fields
+            // Disable the input fields
             const inputs = requestForm.querySelectorAll('input');
             inputs.forEach(input => {
                 input.disabled = true;
             });
         }
-        
-        return false;
-    }
-    
-    // Add new request - sanitize name input
-    requests.push({
-        name: sanitizeInput(name),
-        ip: ipAddress,
-        requestDate: new Date().toISOString()
+    })
+    .catch(error => {
+        console.error("Error submitting access request:", error);
+        showMessage('request-message', 'Error submitting request. Your request has been saved locally, but you may need to try again later.', 'error');
     });
-    
-    localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
-    
-    // Update UI to show pending state
-    const statusElement = document.getElementById('request-status');
-    if (statusElement) {
-        const requestDate = new Date();
-        const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
-        
-        // Use DOM methods instead of innerHTML
-        statusElement.textContent = '';
-        
-        const pendingDiv = document.createElement('div');
-        pendingDiv.className = 'pending-request';
-        
-        const datePara = document.createElement('p');
-        datePara.textContent = `Your request was submitted on ${formattedDate}`;
-        
-        const waitPara = document.createElement('p');
-        waitPara.textContent = 'Please wait for an administrator to review your request.';
-        
-        pendingDiv.appendChild(datePara);
-        pendingDiv.appendChild(waitPara);
-        statusElement.appendChild(pendingDiv);
-        
-        statusElement.style.display = 'block';
-    }
-    
-    // Disable the form to prevent further submissions
-    const requestForm = document.getElementById('request-form');
-    if (requestForm) {
-        const submitButton = requestForm.querySelector('button[type="submit"]');
-        if (submitButton) {
-            submitButton.disabled = true;
-            submitButton.textContent = 'Request Pending';
-            submitButton.classList.add('disabled-button');
-        }
-        
-        // Disable the input fields
-        const inputs = requestForm.querySelectorAll('input');
-        inputs.forEach(input => {
-            input.disabled = true;
-        });
-    }
     
     return true;
 }
 
-// Load access requests for admin panel
+// Store access request locally as a fallback
+function storeLocalAccessRequest(name, ipAddress) {
+    try {
+        const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+        
+        // Check for existing request
+        const existingRequest = requests.find(r => r.ip === ipAddress);
+        if (existingRequest) {
+            // Update existing request
+            existingRequest.name = sanitizeInput(name);
+            existingRequest.requestDate = new Date().toISOString();
+        } else {
+            // Add new request
+            requests.push({
+                name: sanitizeInput(name),
+                ip: ipAddress,
+                requestDate: new Date().toISOString()
+            });
+        }
+        
+        localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
+        return true;
+    } catch (error) {
+        console.error("Error storing local access request:", error);
+        return false;
+    }
+}
+
+// Load access requests for admin panel - Updated to fetch from server
 function loadAccessRequests() {
     const requestList = document.getElementById('request-list');
-    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+    if (!requestList) return;
     
     // Clear current list
-    requestList.textContent = '';
+    requestList.innerHTML = '<p class="loading-message">Loading access requests...</p>';
     
+    // Get the script URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+    
+    // Create the request payload
+    const requestData = {
+        action: "fetchRequests"
+    };
+    
+    // First, load local requests as fallback
+    const localRequests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+    
+    // Try to fetch from server
+    fetch(scriptUrl + "?action=fetchRequests")
+        .then(response => response.json())
+        .then(data => {
+            // Clear loading message
+            requestList.innerHTML = '';
+            
+            // Handle server response
+            if (data.success && data.data && Array.isArray(data.data)) {
+                const serverRequests = data.data;
+                
+                // Merge server and local requests (prioritize server data)
+                const allRequests = [...serverRequests];
+                
+                // Add local requests that aren't in server data
+                localRequests.forEach(localReq => {
+                    if (!serverRequests.some(serverReq => serverReq.ip === localReq.ip)) {
+                        allRequests.push({
+                            name: localReq.name,
+                            ip: localReq.ip,
+                            timestamp: localReq.requestDate,
+                            status: "Pending (Local)",
+                            local: true
+                        });
+                    }
+                });
+                
+                // Display the combined requests
+                displayAccessRequests(allRequests, requestList);
+            } else {
+                // If server fetch fails, fall back to local data
+                displayAccessRequests(localRequests.map(req => ({
+                    name: req.name,
+                    ip: req.ip,
+                    timestamp: req.requestDate,
+                    status: "Pending (Local)",
+                    local: true
+                })), requestList);
+            }
+        })
+        .catch(error => {
+            console.error("Error fetching access requests:", error);
+            // Fall back to local data on error
+            requestList.innerHTML = '';
+            displayAccessRequests(localRequests.map(req => ({
+                name: req.name,
+                ip: req.ip,
+                timestamp: req.requestDate,
+                status: "Pending (Local)",
+                local: true
+            })), requestList);
+        });
+}
+
+// Helper function to display access requests
+function displayAccessRequests(requests, requestList) {
     if (requests.length === 0) {
         const noItemsMsg = document.createElement('p');
         noItemsMsg.className = 'no-items-message';
@@ -884,8 +954,18 @@ function loadAccessRequests() {
         requestItem.className = 'request-item';
         
         // Format date for display
-        const requestDate = new Date(request.requestDate);
-        const formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+        let formattedDate = "Unknown date";
+        
+        if (request.timestamp) {
+            try {
+                const requestDate = new Date(request.timestamp);
+                if (!isNaN(requestDate.getTime())) {
+                    formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+                }
+            } catch (e) {
+                console.error("Date formatting error:", e);
+            }
+        }
         
         // Create request info section
         const infoDiv = document.createElement('div');
@@ -902,9 +982,20 @@ function loadAccessRequests() {
         const dateP = document.createElement('p');
         dateP.textContent = `Requested: ${formattedDate}`;
         
+        // Add source indicator for local vs server
+        const sourceP = document.createElement('p');
+        if (request.local) {
+            sourceP.textContent = 'Source: This device only';
+            sourceP.style.color = '#ff9800';
+        } else {
+            sourceP.textContent = 'Source: Server';
+            sourceP.style.color = '#4caf50';
+        }
+        
         infoDiv.appendChild(nameP);
         infoDiv.appendChild(ipP);
         infoDiv.appendChild(dateP);
+        infoDiv.appendChild(sourceP);
         
         // Create actions section
         const actionsDiv = document.createElement('div');
@@ -915,11 +1006,13 @@ function loadAccessRequests() {
         approveBtn.textContent = 'Approve';
         approveBtn.dataset.ip = request.ip;
         approveBtn.dataset.name = request.name;
+        approveBtn.dataset.row = request.row || '';
         
         const rejectBtn = document.createElement('button');
         rejectBtn.className = 'admin-btn reject';
         rejectBtn.textContent = 'Reject';
         rejectBtn.dataset.ip = request.ip;
+        rejectBtn.dataset.row = request.row || '';
         
         actionsDiv.appendChild(approveBtn);
         actionsDiv.appendChild(rejectBtn);
@@ -936,100 +1029,22 @@ function loadAccessRequests() {
         btn.addEventListener('click', function() {
             const ip = this.getAttribute('data-ip');
             const name = this.getAttribute('data-name');
-            approveAccessRequest(ip, name);
+            const row = this.getAttribute('data-row');
+            approveAccessRequest(ip, name, row);
         });
     });
     
     document.querySelectorAll('#request-list .admin-btn.reject').forEach(btn => {
         btn.addEventListener('click', function() {
             const ip = this.getAttribute('data-ip');
-            rejectAccessRequest(ip);
+            const row = this.getAttribute('data-row');
+            rejectAccessRequest(ip, row);
         });
     });
 }
 
-// Load whitelisted IPs for admin panel
-function loadWhitelistedIPs() {
-    const ipList = document.getElementById('ip-list');
-    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-    
-    // Clear current list
-    ipList.textContent = '';
-    
-    if (whitelist.length === 0) {
-        const noItemsMsg = document.createElement('p');
-        noItemsMsg.className = 'no-items-message';
-        noItemsMsg.textContent = 'No whitelisted IP addresses.';
-        ipList.appendChild(noItemsMsg);
-        return;
-    }
-    
-    // Add each IP to the list
-    whitelist.forEach(entry => {
-        // Validate the IP
-        if (!entry.ip || !isValidIPAddress(entry.ip)) {
-            return; // Skip invalid entries
-        }
-        
-        const ipItem = document.createElement('div');
-        ipItem.className = 'user-item';
-        
-        // Format date for display
-        const addedDate = new Date(entry.addedDate);
-        const formattedDate = addedDate.toLocaleDateString() + ' ' + addedDate.toLocaleTimeString();
-        
-        // Create user info section
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'user-info';
-        
-        const nameP = document.createElement('p');
-        const nameStrong = document.createElement('strong');
-        nameStrong.textContent = sanitizeInput(entry.name);
-        nameP.appendChild(nameStrong);
-        
-        const ipP = document.createElement('p');
-        ipP.textContent = `IP Address: ${sanitizeInput(entry.ip)}`;
-        
-        const dateP = document.createElement('p');
-        dateP.textContent = `Added: ${formattedDate}`;
-        
-        const addedByP = document.createElement('p');
-        addedByP.textContent = `Added by: ${sanitizeInput(entry.addedBy)}`;
-        
-        infoDiv.appendChild(nameP);
-        infoDiv.appendChild(ipP);
-        infoDiv.appendChild(dateP);
-        infoDiv.appendChild(addedByP);
-        
-        // Create actions section
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'user-actions';
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'admin-btn delete';
-        deleteBtn.textContent = 'Remove';
-        deleteBtn.dataset.ip = entry.ip;
-        
-        actionsDiv.appendChild(deleteBtn);
-        
-        // Add to IP item
-        ipItem.appendChild(infoDiv);
-        ipItem.appendChild(actionsDiv);
-        
-        ipList.appendChild(ipItem);
-    });
-    
-    // Add event listeners for delete buttons
-    document.querySelectorAll('#ip-list .admin-btn.delete').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const ip = this.getAttribute('data-ip');
-            removeIPFromWhitelist(ip);
-        });
-    });
-}
-
-// Approve access request and add IP to whitelist
-function approveAccessRequest(ip, name) {
+// Approve access request and add IP to whitelist - Updated to use server API
+function approveAccessRequest(ip, name, row) {
     // Validate inputs first
     if (!isValidIPAddress(ip)) return false;
     
@@ -1039,13 +1054,6 @@ function approveAccessRequest(ip, name) {
     // Validate name pattern
     const namePattern = /^[A-Za-z\s\-']+$/;
     if (!namePattern.test(name)) return false;
-    
-    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
-    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-    
-    // Find the request
-    const requestIndex = requests.findIndex(r => r.ip === ip);
-    if (requestIndex === -1) return false;
     
     // Get admin info with safer retrieval
     let adminName = 'Admin';
@@ -1058,6 +1066,26 @@ function approveAccessRequest(ip, name) {
         console.error("Error retrieving admin info:", error);
     }
     
+    // Create data for server request
+    const requestData = {
+        action: "approveRequest",
+        ip: ip,
+        name: name,
+        admin: adminName,
+        row: row || ''
+    };
+    
+    // Get script URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+    
+    // Local fallback - proceed with local approval
+    // First handle locally so UI updates immediately
+    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist') || '[]');
+    
+    // Find the request
+    const requestIndex = requests.findIndex(r => r.ip === ip);
+    
     // Create new whitelist entry with validated data
     const newEntry = {
         name: name,
@@ -1067,16 +1095,33 @@ function approveAccessRequest(ip, name) {
         addedDate: new Date().toISOString()
     };
     
-    // Add to whitelist and remove request
+    // Add to whitelist and remove request if found locally
     whitelist.push(newEntry);
-    requests.splice(requestIndex, 1);
+    if (requestIndex !== -1) {
+        requests.splice(requestIndex, 1);
+    }
     
-    // Save changes
+    // Save changes locally
     localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
     localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
     
     // Log this approval action
     logAccessAction(`IP ${ip} (${name}) was added to whitelist`);
+    
+    // Send to server
+    fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+        mode: 'no-cors' // Required for Google Apps Script web apps
+    })
+    .catch(error => {
+        console.error("Error approving request on server:", error);
+        // Show warning about server sync
+        logToPage("Request approved locally but server sync failed. Please try again later.", "warning");
+    });
     
     // Refresh lists
     loadAccessRequests();
@@ -1085,18 +1130,44 @@ function approveAccessRequest(ip, name) {
     return true;
 }
 
-// Reject access request
-function rejectAccessRequest(ip) {
-    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests')) || [];
+// Reject access request - Updated to use server API
+function rejectAccessRequest(ip, row) {
+    // Create data for server request
+    const requestData = {
+        action: "rejectRequest",
+        ip: ip,
+        row: row || ''
+    };
     
-    // Find and remove the request
+    // Get script URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+    
+    // Local handling
+    const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+    
+    // Find and remove the request locally
     const requestIndex = requests.findIndex(r => r.ip === ip);
-    if (requestIndex === -1) return false;
+    if (requestIndex !== -1) {
+        requests.splice(requestIndex, 1);
+        
+        // Save changes locally
+        localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
+    }
     
-    requests.splice(requestIndex, 1);
-    
-    // Save changes
-    localStorage.setItem('qrscan_access_requests', JSON.stringify(requests));
+    // Send to server
+    fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+        mode: 'no-cors' // Required for Google Apps Script web apps
+    })
+    .catch(error => {
+        console.error("Error rejecting request on server:", error);
+        // Show warning about server sync
+        logToPage("Request rejected locally but server sync failed. Please try again later.", "warning");
+    });
     
     // Refresh list
     loadAccessRequests();
@@ -1104,75 +1175,25 @@ function rejectAccessRequest(ip) {
     return true;
 }
 
-// Remove IP from whitelist with revocation broadcasting
-function removeIPFromWhitelist(ip) {
-    const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
+// Helper function to show messages in the log
+function logToPage(message, type = 'info') {
+    // Exit early if message is invalid
+    if (!message) return;
     
-    // Find and remove the entry
-    const entryIndex = whitelist.findIndex(e => e.ip === ip);
-    if (entryIndex === -1) return false;
-    
-    if (confirm(`Are you sure you want to remove this IP address from the whitelist?`)) {
-        // Store the user info before removal for logging
-        const removedUser = whitelist[entryIndex];
+    // If we have a logMessages element, use it
+    const logMessages = document.getElementById('log-messages');
+    if (logMessages) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry ${type}`;
         
-        // Remove the entry
-        whitelist.splice(entryIndex, 1);
+        const timestamp = new Date().toLocaleTimeString();
+        logEntry.textContent = `${timestamp}: ${message}`;
         
-        // Save changes
-        localStorage.setItem('qrscan_ip_whitelist', JSON.stringify(whitelist));
-        
-        // Add entry to revocation list with timestamp
-        const revocations = JSON.parse(localStorage.getItem('qrscan_ip_revocations') || '[]');
-        revocations.push({
-            ip: ip,
-            name: removedUser.name || 'Unknown',
-            revokedAt: new Date().toISOString(),
-            revokedBy: getCurrentAdminName()
-        });
-        
-        // Keep only the last 100 revocations to prevent localStorage from growing too large
-        while (revocations.length > 100) {
-            revocations.shift();
-        }
-        
-        localStorage.setItem('qrscan_ip_revocations', JSON.stringify(revocations));
-        
-        // Clear the IP whitelist status cache
-        sessionStorage.removeItem('ip_whitelist_status');
-        
-        // Add to access log
-        logAccessAction(` IP ${ip} (${removedUser.name || 'Unknown user'}) was removed from whitelist`);
-        
-        // Refresh list
-        loadWhitelistedIPs();
+        logMessages.prepend(logEntry);
     }
     
-    return true;
-}
-
-// Helper function to get current admin's name
-function getCurrentAdminName() {
-    const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-    return currentAdmin ? currentAdmin.name : 'Admin';
-}
-
-// Function to log access control actions
-function logAccessAction(action) {
-    const accessLog = JSON.parse(localStorage.getItem('qrscan_access_log') || '[]');
-    
-    accessLog.push({
-        action: action,
-        timestamp: new Date().toISOString(),
-        admin: getCurrentAdminName()
-    });
-    
-    // Keep log size reasonable
-    while (accessLog.length > 500) {
-        accessLog.shift();
-    }
-    
-    localStorage.setItem('qrscan_access_log', JSON.stringify(accessLog));
+    // Log to console as well
+    console.log(`[${type.toUpperCase()}] ${message}`);
 }
 
 // Add periodic check for whitelist status to catch revocations
