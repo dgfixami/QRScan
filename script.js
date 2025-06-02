@@ -447,8 +447,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const scanData = {
             code: code,
             mode: actionMode,
-            timestamp: new Date().toISOString(),
-            userName: sessionStorage.getItem('user_name') || 'Unknown User' // Add user name
+            timestamp: new Date().toISOString()
         };
         
         // Update UI to show the current action
@@ -474,11 +473,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function sendToGoogleSheets(scanData, callback) {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
-        
-        // Make sure the user name is included in the data
-        if (!scanData.userName) {
-            scanData.userName = sessionStorage.getItem('user_name') || 'Unknown User';
-        }
         
         fetch(scriptUrl, {
             method: 'POST',
@@ -587,8 +581,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const scanData = {
                 code: decodedText,
                 mode: currentMode,
-                timestamp: new Date().toISOString(),
-                userName: sessionStorage.getItem('user_name') || 'Unknown User' // Add user name
+                timestamp: new Date().toISOString()
             };
             
             // Log locally first

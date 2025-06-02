@@ -193,18 +193,17 @@ function logScan(data, rowNumber, timestamp) {
     let logSheet = spreadsheet.getSheetByName("ScanLog");
     if (!logSheet) {
       logSheet = spreadsheet.insertSheet("ScanLog");
-      // Add headers - include User Name
-      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status", "User Name"]);
+      // Add headers
+      logSheet.appendRow(["Timestamp", "QR Code", "Mode", "Row Updated", "Status"]);
     }
     
-    // Append the scan data, now including user name
+    // Append the scan data
     logSheet.appendRow([
       timestamp, 
       data.code, 
       data.mode,
       rowNumber > 0 ? rowNumber : "Not Found",
-      rowNumber > 0 ? "Updated" : "Not Found",
-      data.userName || "Unknown User" // Include the user's name in the log
+      rowNumber > 0 ? "Updated" : "Not Found"
     ]);
   } catch (error) {
     Logger.log("Error logging scan: " + error.toString());
