@@ -189,32 +189,11 @@
                     return false;
                 }
                 
-                // Store locally first as fallback
-                addAccessRequest(name, userIP);
+                // Submit the access request
+                const success = addAccessRequest(name, userIP);
                 
-                // Send to Google Apps Script server
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
-                
-                // Show sending status
-                showMessage("Submitting your access request...", 'info');
-                
-                // Create request data
-                const requestData = {
-                    action: "accessRequest",
-                    name: sanitizeInput(name),
-                    ip: userIP
-                };
-                
-                // Send to server
-                fetch(scriptUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(requestData),
-                    mode: 'no-cors' // Required for Google Apps Script web apps
-                })
-                .then(() => {
+                if (success) {
+                    // Show success message
                     showMessage("Your access request has been submitted. Please wait for admin approval.", 'success');
                     
                     // Update UI to show pending state
@@ -222,15 +201,11 @@
                     
                     // Disable the form
                     disableForm();
-                })
-                .catch(error => {
-                    console.error("Error sending to server:", error);
-                    showMessage("Request stored locally, but server submission failed. Please try again later.", 'warning');
+                } else {
+                    showMessage("Error submitting your request. Please try again.", 'error');
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Submit Request';
-                });
-                
-                return true;
+                }
             } catch (error) {
                 console.error("Error in form submission:", error);
                 showMessage("An unexpected error occurred. Please try again.", 'error');

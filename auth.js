@@ -879,8 +879,8 @@ function loadAccessRequests(forceRefresh = false) {
             const cacheTime = parseInt(parsed.timestamp || '0');
             const now = new Date().getTime();
             
-            // Use cache if it's less than 30 seconds old (reduced from 1 minute for more frequent refreshes)
-            if (now - cacheTime < 30000) {
+            // Use cache if it's less than 1 minute old
+            if (now - cacheTime < 60000) {
                 console.log("Using cached access requests");
                 displayAccessRequests(parsed.requests || [], requestList);
                 return;
@@ -893,8 +893,8 @@ function loadAccessRequests(forceRefresh = false) {
     // First, load local requests as fallback
     const localRequests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
     
-    // Always try to fetch from server first
-    fetch(`${scriptUrl}?action=fetchRequests`)
+    // Try to fetch from server
+    fetch(scriptUrl + "?action=fetchRequests")
         .then(response => response.json())
         .then(data => {
             // Clear loading message
@@ -902,26 +902,32 @@ function loadAccessRequests(forceRefresh = false) {
             
             // Handle server response
             if (data.success && data.data && Array.isArray(data.data)) {
-                console.log("Server returned requests:", data.data);
                 const serverRequests = data.data;
                 
-                // Store server requests in localStorage for faster local access
-                // Important: We're replacing localStorage with server data to keep it synced
-                const simplifiedRequests = serverRequests.map(req => ({
-                    name: req.name,
-                    ip: req.ip,
-                    requestDate: req.timestamp
-                }));
-                localStorage.setItem('qrscan_access_requests', JSON.stringify(simplifiedRequests));
+                // Merge server and local requests (prioritize server data)
+                const allRequests = [...serverRequests];
+                
+                // Add local requests that aren't in server data
+                localRequests.forEach(localReq => {
+                    if (!serverRequests.some(serverReq => serverReq.ip === localReq.ip)) {
+                        allRequests.push({
+                            name: localReq.name,
+                            ip: localReq.ip,
+                            timestamp: localReq.requestDate,
+                            status: "Pending (Local)",
+                            local: true
+                        });
+                    }
+                });
                 
                 // Cache the results
                 sessionStorage.setItem('cached_access_requests', JSON.stringify({
-                    requests: serverRequests,
+                    requests: allRequests,
                     timestamp: new Date().getTime()
                 }));
                 
-                // Display the server requests
-                displayAccessRequests(serverRequests, requestList);
+                // Display the combined requests
+                displayAccessRequests(allRequests, requestList);
             } else {
                 // If server fetch fails, fall back to local data
                 displayAccessRequests(localRequests.map(req => ({
