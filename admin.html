@@ -182,6 +182,12 @@
                 if (document.getElementById('log-list')) {
                     loadAccessLog();
                 }
+                
+                // Force refresh requests on page load to ensure synced data
+                const requestList = document.getElementById('request-list');
+                if (requestList) {
+                    loadAccessRequests(true); // Pass true to force server refresh
+                }
             } catch (error) {
                 console.error("Error in admin verification:", error);
                 // Don't redirect on error, just log it and continue

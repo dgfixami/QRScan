@@ -223,7 +223,7 @@ function handleAccessRequest(data) {
     
     if (!requestsSheet) {
       requestsSheet = spreadsheet.insertSheet("AccessRequests");
-      requestsSheet.appendRow(["Timestamp", "Name", "IP Address", "Status"]);
+      requestsSheet.appendRow(["Timestamp", "Name", "IP Address", "Status", "Device"]);
     }
     
     // Check if there's already a pending request for this IP
@@ -233,8 +233,13 @@ function handleAccessRequest(data) {
     
     for (let i = 1; i < values.length; i++) {  // Skip header row
       if (values[i][ipColumn-1] === data.ip && values[i][3] === "Pending") {
-        // Request already exists for this IP
-        return createResponse(false, "A pending request already exists for this IP address");
+        // Request already exists for this IP, update timestamp and name
+        const row = i + 1; // Convert to 1-based index
+        requestsSheet.getRange(row, 1).setValue(new Date()); // Update timestamp
+        requestsSheet.getRange(row, 2).setValue(data.name); // Update name
+        
+        Logger.log("Updated existing request for IP: " + data.ip);
+        return createResponse(true, "Access request updated successfully");
       }
     }
     
@@ -242,8 +247,14 @@ function handleAccessRequest(data) {
     const now = new Date();
     const timestamp = Utilities.formatDate(now, spreadsheet.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
     
+    // Get user agent or device info if available
+    let deviceInfo = "Unknown device";
+    if (data.userAgent) {
+      deviceInfo = data.userAgent.substring(0, 100); // Limit to 100 chars
+    }
+    
     // Add the new request
-    requestsSheet.appendRow([timestamp, data.name, data.ip, "Pending"]);
+    requestsSheet.appendRow([timestamp, data.name, data.ip, "Pending", deviceInfo]);
     
     return createResponse(true, "Access request submitted successfully");
   } catch (error) {
@@ -271,11 +282,19 @@ function fetchAccessRequests() {
     const requests = [];
     for (let i = 1; i < values.length; i++) {
       if (values[i][3] === "Pending") {  // Only include pending requests
+        // Format timestamp if it's a date
+        let timestamp = values[i][0];
+        if (timestamp instanceof Date) {
+          const timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+          timestamp = Utilities.formatDate(timestamp, timezone, "dd/MM/yyyy HH:mm:ss");
+        }
+        
         requests.push({
-          timestamp: values[i][0],
+          timestamp: timestamp,
           name: values[i][1],
           ip: values[i][2],
           status: values[i][3],
+          device: values[i][4] || 'Unknown device',
           row: i + 1  // +1 because arrays are 0-indexed but sheet rows are 1-indexed
         });
       }
