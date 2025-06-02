@@ -89,25 +89,41 @@ function handleLookup(code) {
 // New functions to handle access requests
 function doPost(e) {
   try {
-    // Check what type of request this is
-    if (e.postData && e.postData.contents) {
-      const data = JSON.parse(e.postData.contents);
+    let data;
+    
+    // Check if this is URL-encoded form data
+    if (e.postData.type === "application/x-www-form-urlencoded") {
+      // Parse URL-encoded form data
+      data = {};
+      const params = e.postData.contents.split('&');
       
-      // Handle different types of requests
-      if (data.action === "scan") {
-        // Original scan functionality
-        return handleScanPost(data);
-      } else if (data.action === "accessRequest") {
-        return handleAccessRequest(data);
-      } else if (data.action === "fetchRequests") {
-        return fetchAccessRequests();
-      } else if (data.action === "approveRequest") {
-        return approveAccessRequest(data);
-      } else if (data.action === "rejectRequest") {
-        return rejectAccessRequest(data);
-      } else if (data.action === "clearAllRequests") {
-        return clearAllRequests(data);
+      for (let i = 0; i < params.length; i++) {
+        const pair = params[i].split('=');
+        if (pair.length === 2) {
+          const key = decodeURIComponent(pair[0]);
+          const value = decodeURIComponent(pair[1]);
+          data[key] = value;
+        }
       }
+    } else {
+      // Assume it's JSON
+      data = JSON.parse(e.postData.contents);
+    }
+    
+    // Handle different types of requests
+    if (data.action === "scan") {
+      // Original scan functionality
+      return handleScanPost(data);
+    } else if (data.action === "accessRequest") {
+      return handleAccessRequest(data);
+    } else if (data.action === "fetchRequests") {
+      return fetchAccessRequests();
+    } else if (data.action === "approveRequest") {
+      return approveAccessRequest(data);
+    } else if (data.action === "rejectRequest") {
+      return rejectAccessRequest(data);
+    } else if (data.action === "clearAllRequests") {
+      return clearAllRequests(data);
     }
     
     return createResponse(false, "Invalid request format");
@@ -212,6 +228,9 @@ function handleScanPost(data) {
 // Handle new access request
 function handleAccessRequest(data) {
   try {
+    // Log incoming request data to debug
+    Logger.log("Received access request data: " + JSON.stringify(data));
+    
     // Validate the request data
     if (!data.name || !data.ip) {
       return createResponse(false, "Missing required fields");
@@ -238,6 +257,11 @@ function handleAccessRequest(data) {
         requestsSheet.getRange(row, 1).setValue(new Date()); // Update timestamp
         requestsSheet.getRange(row, 2).setValue(data.name); // Update name
         
+        // Update device info if available
+        if (data.userAgent) {
+          requestsSheet.getRange(row, 5).setValue(data.userAgent.substring(0, 100));
+        }
+        
         Logger.log("Updated existing request for IP: " + data.ip);
         return createResponse(true, "Access request updated successfully");
       }
@@ -245,7 +269,6 @@ function handleAccessRequest(data) {
     
     // Current timestamp
     const now = new Date();
-    const timestamp = Utilities.formatDate(now, spreadsheet.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
     
     // Get user agent or device info if available
     let deviceInfo = "Unknown device";
@@ -254,7 +277,10 @@ function handleAccessRequest(data) {
     }
     
     // Add the new request
-    requestsSheet.appendRow([timestamp, data.name, data.ip, "Pending", deviceInfo]);
+    requestsSheet.appendRow([now, data.name, data.ip, "Pending", deviceInfo]);
+    
+    // Log the successful addition
+    Logger.log("Added new access request for IP: " + data.ip + ", Name: " + data.name);
     
     return createResponse(true, "Access request submitted successfully");
   } catch (error) {
