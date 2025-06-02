@@ -202,23 +202,16 @@
                 const requestData = {
                     action: "accessRequest",
                     name: sanitizeInput(name),
-                    ip: userIP,
-                    userAgent: navigator.userAgent || "Unknown device" // Add user agent for device tracking
+                    ip: userIP
                 };
                 
-                // Convert to URL encoded form data which works better with Google Apps Script
-                const formData = new URLSearchParams();
-                for (const key in requestData) {
-                    formData.append(key, requestData[key]);
-                }
-                
-                // Send to server - using form data instead of JSON
+                // Send to server
                 fetch(scriptUrl, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Type': 'application/json',
                     },
-                    body: formData.toString(),
+                    body: JSON.stringify(requestData),
                     mode: 'no-cors' // Required for Google Apps Script web apps
                 })
                 .then(() => {
