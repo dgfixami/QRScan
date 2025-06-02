@@ -192,84 +192,52 @@
                 // Store locally first as fallback
                 addAccessRequest(name, userIP);
                 
+                // Send to Google Apps Script server
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
+                
                 // Show sending status
                 showMessage("Submitting your access request...", 'info');
                 
-                // Create a new hidden iframe for submission
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
-
-                // Create form data for iframe submission
-                const formId = 'access-request-form-' + Math.random().toString(36).substr(2, 9);
-                const iframeId = 'access-request-iframe-' + Math.random().toString(36).substr(2, 9);
-
-                // Create hidden iframe
-                const iframe = document.createElement('iframe');
-                iframe.name = iframeId;
-                iframe.id = iframeId;
-                iframe.style.display = 'none';
-                document.body.appendChild(iframe);
-
-                // Create form that will post to iframe
-                const form = document.createElement('form');
-                form.id = formId;
-                form.method = 'post';
-                form.action = scriptUrl;
-                form.target = iframeId;
-                form.style.display = 'none';
-
-                // Add parameters to form
-                const addParam = (name, value) => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = name;
-                    input.value = value;
-                    form.appendChild(input);
+                // Create request data
+                const requestData = {
+                    action: "accessRequest",
+                    name: sanitizeInput(name),
+                    ip: userIP,
+                    userAgent: navigator.userAgent || "Unknown device" // Add user agent for device tracking
                 };
                 
-                addParam('action', 'accessRequest');
-                addParam('name', sanitizeInput(name));
-                addParam('ip', userIP);
-                addParam('userAgent', navigator.userAgent || "Unknown device");
-
-                document.body.appendChild(form);
+                // Convert to URL encoded form data which works better with Google Apps Script
+                const formData = new URLSearchParams();
+                for (const key in requestData) {
+                    formData.append(key, requestData[key]);
+                }
                 
-                // Set a timer to catch failed/no responses
-                const timeoutId = setTimeout(() => {
-                    console.log("Submission timeout - assuming success anyway");
-                    handleSubmissionSuccess();
-                    cleanupSubmissionElements();
-                }, 5000); // 5 seconds timeout
-
-                // Define success handler
-                iframe.onload = () => {
-                    clearTimeout(timeoutId);
-                    console.log("Form submission completed");
-                    handleSubmissionSuccess();
-                    cleanupSubmissionElements();
-                };
-
-                // Function to handle successful submission
-                function handleSubmissionSuccess() {
+                // Send to server - using form data instead of JSON
+                fetch(scriptUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData.toString(),
+                    mode: 'no-cors' // Required for Google Apps Script web apps
+                })
+                .then(() => {
                     showMessage("Your access request has been submitted. Please wait for admin approval.", 'success');
+                    
+                    // Update UI to show pending state
                     showPendingRequestStatus(name);
+                    
+                    // Disable the form
                     disableForm();
-                }
-
-                // Function to clean up the form and iframe
-                function cleanupSubmissionElements() {
-                    // Remove the form and iframe
-                    if (document.getElementById(formId)) {
-                        document.getElementById(formId).remove();
-                    }
-                    if (document.getElementById(iframeId)) {
-                        document.getElementById(iframeId).remove();
-                    }
-                }
-
-                // Submit the form
-                form.submit();
-                return true;
+                })
+                .catch(error => {
+                    console.error("Error sending to server:", error);
+                    showMessage("Request stored locally, but server submission failed. Please try again later.", 'warning');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit Request';
+                });
                 
+                return true;
             } catch (error) {
                 console.error("Error in form submission:", error);
                 showMessage("An unexpected error occurred. Please try again.", 'error');
