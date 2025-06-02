@@ -368,8 +368,39 @@
             const requestList = document.getElementById('request-list');
             requestList.innerHTML = '<p class="loading-message">Clearing all requests...</p>';
             
-            // Always enable the clear button - it will always attempt to clear requests
-            document.getElementById('clear-all-requests').style.display = 'inline-block';
+            // Disable the clear button during operation
+            const clearButton = document.getElementById('clear-all-requests');
+            if (clearButton) {
+                clearButton.disabled = true;
+                clearButton.style.opacity = '0.6';
+            }
+            
+            // Handle clearing locally first
+            const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
+            localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+            
+            // Clear the cache
+            sessionStorage.removeItem('cached_access_requests');
+            
+            // Log the action
+            logAccessAction(`All pending access requests were cleared (forced cleanup)`);
+            
+            // Set a safety timeout to ensure UI updates even if the server doesn't respond
+            const safetyTimeout = setTimeout(() => {
+                console.log("Safety timeout triggered for clear requests");
+                requestList.innerHTML = '<p class="success-message">Local requests cleared. Server response timeout - status unknown.</p>';
+                
+                // Re-enable the button
+                if (clearButton) {
+                    clearButton.disabled = false;
+                    clearButton.style.opacity = '1';
+                }
+                
+                // Refresh the list
+                setTimeout(() => {
+                    loadAccessRequests(true); // Force refresh from server
+                }, 1000);
+            }, 8000); // 8 second safety timeout
             
             // Send to server
             fetch(scriptUrl, {
@@ -381,38 +412,74 @@
                 mode: 'no-cors' // Required for Google Apps Script web apps
             })
             .then(() => {
-                // Handle local storage cleanup as well
-                const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
-                localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+                // Clear the safety timeout as we got a response
+                clearTimeout(safetyTimeout);
                 
-                // Clear the cache
-                sessionStorage.removeItem('cached_access_requests');
-                
-                // Log the action regardless of whether requests were found locally
-                logAccessAction(`All pending access requests were cleared (forced cleanup)`);
-                
-                // Show success message and refresh the list
+                // Show success message
                 requestList.innerHTML = '<p class="success-message">All pending requests have been cleared!</p>';
+                
+                // Re-enable the button
+                if (clearButton) {
+                    clearButton.disabled = false;
+                    clearButton.style.opacity = '1';
+                }
+                
+                // Refresh the list after a short delay
                 setTimeout(() => {
                     loadAccessRequests(true); // Force refresh from server
                 }, 2000);
             })
             .catch(error => {
+                // Clear the safety timeout as we got a response
+                clearTimeout(safetyTimeout);
+                
                 console.error('Error clearing requests:', error);
                 
-                // Still clear local requests
-                localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
-                sessionStorage.removeItem('cached_access_requests');
-                
-                // Log error
-                logAccessAction('Error clearing requests on server, but local requests were cleared');
-                
-                // Show error and refresh list
+                // Show error message
                 requestList.innerHTML = '<p class="error-message">Error clearing requests on server. Local requests have been cleared.</p>';
+                
+                // Re-enable the button
+                if (clearButton) {
+                    clearButton.disabled = false;
+                    clearButton.style.opacity = '1';
+                }
+                
+                // Refresh the list
                 setTimeout(() => {
                     loadAccessRequests(true); // Force refresh from server
                 }, 3000);
             });
+        }
+
+        // Function to log admin actions to the access log
+        function logAccessAction(action) {
+            try {
+                const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin') || '{}');
+                const adminName = currentAdmin.name || 'Admin';
+                
+                const accessLog = JSON.parse(localStorage.getItem('qrscan_access_log') || '[]');
+                
+                // Add new log entry with validated inputs
+                accessLog.push({
+                    action: String(action || '').substring(0, 200), // Prevent excessively long actions
+                    timestamp: new Date().toISOString(),
+                    admin: String(adminName || 'Unknown').substring(0, 50) // Limit admin name length
+                });
+                
+                // Keep log size reasonable (keep last 100 entries max)
+                while(accessLog.length > 100) {
+                    accessLog.shift();
+                }
+                
+                localStorage.setItem('qrscan_access_log', JSON.stringify(accessLog));
+                
+                // Refresh log display if visible
+                if (document.getElementById('access-log').classList.contains('active')) {
+                    loadAccessLog();
+                }
+            } catch(error) {
+                console.error("Error logging action:", error);
+            }
         }
     </script>
     
