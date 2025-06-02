@@ -86,29 +86,44 @@ function handleLookup(code) {
   }
 }
 
-// New functions to handle access requests
+// New function to handle form-based submissions for access requests
 function doPost(e) {
   try {
-    let data;
+    let data = {};
     
-    // Check if this is URL-encoded form data
-    if (e.postData.type === "application/x-www-form-urlencoded") {
-      // Parse URL-encoded form data
-      data = {};
-      const params = e.postData.contents.split('&');
-      
-      for (let i = 0; i < params.length; i++) {
-        const pair = params[i].split('=');
-        if (pair.length === 2) {
-          const key = decodeURIComponent(pair[0]);
-          const value = decodeURIComponent(pair[1]);
-          data[key] = value;
+    // Log incoming data for debugging
+    Logger.log("Received POST data: " + JSON.stringify(e));
+    
+    // Check which format of data we received
+    if (e.postData) {
+      // Process JSON or URL encoded data
+      if (e.postData.type === "application/x-www-form-urlencoded") {
+        // Parse URL encoded form data
+        const params = e.postData.contents.split('&');
+        for (let i = 0; i < params.length; i++) {
+          const pair = params[i].split('=');
+          if (pair.length === 2) {
+            const key = decodeURIComponent(pair[0]);
+            const value = decodeURIComponent(pair[1]);
+            data[key] = value;
+          }
+        }
+      } else if (e.postData.contents) {
+        // Try to parse as JSON
+        try {
+          data = JSON.parse(e.postData.contents);
+        } catch (err) {
+          Logger.log("Failed to parse JSON: " + err);
+          // Just use the raw contents as action if parsing fails
+          data = { action: e.postData.contents };
         }
       }
-    } else {
-      // Assume it's JSON
-      data = JSON.parse(e.postData.contents);
+    } else if (e.parameter) {
+      // Handle form POST with parameters in e.parameter
+      data = e.parameter;
     }
+    
+    Logger.log("Processed POST data: " + JSON.stringify(data));
     
     // Handle different types of requests
     if (data.action === "scan") {
@@ -126,7 +141,7 @@ function doPost(e) {
       return clearAllRequests(data);
     }
     
-    return createResponse(false, "Invalid request format");
+    return createResponse(false, "Invalid request format or missing action parameter");
   } catch (error) {
     Logger.log("Error in doPost: " + error.toString());
     return createResponse(false, "Error processing request: " + error.toString());
@@ -225,7 +240,7 @@ function handleScanPost(data) {
   }
 }
 
-// Handle new access request
+// Enhanced handle access request
 function handleAccessRequest(data) {
   try {
     // Log incoming request data to debug
@@ -233,7 +248,7 @@ function handleAccessRequest(data) {
     
     // Validate the request data
     if (!data.name || !data.ip) {
-      return createResponse(false, "Missing required fields");
+      return createResponse(false, "Missing required fields (name or IP)");
     }
     
     // Get or create the access requests sheet
@@ -243,6 +258,7 @@ function handleAccessRequest(data) {
     if (!requestsSheet) {
       requestsSheet = spreadsheet.insertSheet("AccessRequests");
       requestsSheet.appendRow(["Timestamp", "Name", "IP Address", "Status", "Device"]);
+      Logger.log("Created new AccessRequests sheet");
     }
     
     // Check if there's already a pending request for this IP
@@ -263,7 +279,7 @@ function handleAccessRequest(data) {
         }
         
         Logger.log("Updated existing request for IP: " + data.ip);
-        return createResponse(true, "Access request updated successfully");
+        return HtmlService.createHtmlOutput("<p>Access request updated successfully</p>");
       }
     }
     
@@ -282,10 +298,11 @@ function handleAccessRequest(data) {
     // Log the successful addition
     Logger.log("Added new access request for IP: " + data.ip + ", Name: " + data.name);
     
-    return createResponse(true, "Access request submitted successfully");
+    // Return HTML response for form submissions
+    return HtmlService.createHtmlOutput("<p>Access request submitted successfully!</p>");
   } catch (error) {
     Logger.log("Error handling access request: " + error.toString());
-    return createResponse(false, "Error processing access request: " + error.toString());
+    return HtmlService.createHtmlOutput("<p>Error processing access request: " + error.toString() + "</p>");
   }
 }
 
