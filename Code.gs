@@ -350,11 +350,12 @@ function rejectAccessRequest(data) {
   }
 }
 
-// New function to clear all pending requests
+// New function to clear all pending requests - enhanced with forceCleanup option
 function clearAllRequests(data) {
   try {
     // Verify required admin data 
     const adminName = data.admin || "Admin";
+    const forceCleanup = data.forceCleanup === true;
     
     // Get the requests sheet
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -362,7 +363,7 @@ function clearAllRequests(data) {
     
     if (!requestsSheet) {
       // No sheet exists, nothing to clear
-      return createResponse(true, "No requests to clear");
+      return createResponse(true, forceCleanup ? "No requests sheet found, but forced cleanup recorded" : "No requests to clear");
     }
     
     // Get all the data and identify which rows have pending requests
@@ -379,6 +380,11 @@ function clearAllRequests(data) {
       }
     }
     
+    // Check if we should proceed when no pending requests are found
+    if (pendingCount === 0 && !forceCleanup) {
+      return createResponse(true, "No pending requests found to clear");
+    }
+    
     // Create archive for cleared requests if it doesn't exist
     let archivedSheet = spreadsheet.getSheetByName("ArchivedRequests");
     if (!archivedSheet) {
@@ -390,23 +396,36 @@ function clearAllRequests(data) {
     const now = new Date();
     const timestamp = Utilities.formatDate(now, spreadsheet.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
     
-    pendingRows.forEach(rowIndex => {
-      // Get the row data to archive
-      const rowData = requestsSheet.getRange(rowIndex, 1, 1, 4).getValues()[0];
-      
-      // Add to archive with admin name and timestamp
+    // If we have actual pending requests to process
+    if (pendingCount > 0) {
+      pendingRows.forEach(rowIndex => {
+        // Get the row data to archive
+        const rowData = requestsSheet.getRange(rowIndex, 1, 1, 4).getValues()[0];
+        
+        // Add to archive with admin name and timestamp
+        archivedSheet.appendRow([
+          rowData[0],        // Timestamp
+          rowData[1],        // Name
+          rowData[2],        // IP Address
+          "Cleared",         // New status
+          adminName,         // Admin who cleared
+          timestamp          // When cleared
+        ]);
+        
+        // Update the status in the original sheet to "Cleared"
+        requestsSheet.getRange(rowIndex, 4).setValue("Cleared");
+      });
+    } else if (forceCleanup) {
+      // If forceCleanup is true but no pending requests found, still log the cleanup attempt
       archivedSheet.appendRow([
-        rowData[0],        // Timestamp
-        rowData[1],        // Name
-        rowData[2],        // IP Address
-        "Cleared",         // New status
-        adminName,         // Admin who cleared
-        timestamp          // When cleared
+        timestamp,           // Current timestamp
+        "N/A",               // No name
+        "N/A",               // No IP
+        "Force Cleaned",     // Special status
+        adminName,           // Admin who initiated cleanup
+        timestamp            // When cleanup was initiated
       ]);
-      
-      // Update the status in the original sheet to "Cleared"
-      requestsSheet.getRange(rowIndex, 4).setValue("Cleared");
-    });
+    }
     
     // Log this action
     const logSheet = spreadsheet.getSheetByName("ActivityLog") || spreadsheet.insertSheet("ActivityLog");
@@ -414,13 +433,29 @@ function clearAllRequests(data) {
       logSheet.appendRow(["Timestamp", "Action", "Admin"]);
     }
     
+    // Create appropriate log message based on whether we found requests or forced cleanup
+    let actionMessage;
+    if (pendingCount > 0) {
+      actionMessage = `Cleared all pending access requests (${pendingCount} requests)`;
+    } else if (forceCleanup) {
+      actionMessage = `Force-cleared all pending access requests (no requests found, but cleanup recorded)`;
+    } else {
+      actionMessage = `Attempted to clear pending requests, but none were found`;
+    }
+    
     logSheet.appendRow([
       timestamp,
-      `Cleared all pending access requests (${pendingCount} requests)`,
+      actionMessage,
       adminName
     ]);
     
-    return createResponse(true, `Successfully cleared ${pendingCount} pending requests`);
+    if (pendingCount > 0) {
+      return createResponse(true, `Successfully cleared ${pendingCount} pending requests`);
+    } else if (forceCleanup) {
+      return createResponse(true, "Force cleanup completed - no pending requests were found, but action was recorded");
+    } else {
+      return createResponse(true, "No pending requests found to clear");
+    }
   } catch (error) {
     Logger.log("Error clearing requests: " + error.toString());
     return createResponse(false, "Error clearing requests: " + error.toString());

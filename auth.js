@@ -860,8 +860,8 @@ function storeLocalAccessRequest(name, ipAddress) {
     }
 }
 
-// Load access requests for admin panel - Updated to fetch from server
-function loadAccessRequests() {
+// Load access requests for admin panel - Updated to fetch from server with caching and force refresh option
+function loadAccessRequests(forceRefresh = false) {
     const requestList = document.getElementById('request-list');
     if (!requestList) return;
     
@@ -871,10 +871,24 @@ function loadAccessRequests() {
     // Get the script URL
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
     
-    // Create the request payload
-    const requestData = {
-        action: "fetchRequests"
-    };
+    // Check if we have cached data and force refresh is not requested
+    const cachedData = sessionStorage.getItem('cached_access_requests');
+    if (cachedData && !forceRefresh) {
+        try {
+            const parsed = JSON.parse(cachedData);
+            const cacheTime = parseInt(parsed.timestamp || '0');
+            const now = new Date().getTime();
+            
+            // Use cache if it's less than 1 minute old
+            if (now - cacheTime < 60000) {
+                console.log("Using cached access requests");
+                displayAccessRequests(parsed.requests || [], requestList);
+                return;
+            }
+        } catch (e) {
+            console.error("Cache parse error:", e);
+        }
+    }
     
     // First, load local requests as fallback
     const localRequests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
@@ -906,6 +920,12 @@ function loadAccessRequests() {
                     }
                 });
                 
+                // Cache the results
+                sessionStorage.setItem('cached_access_requests', JSON.stringify({
+                    requests: allRequests,
+                    timestamp: new Date().getTime()
+                }));
+                
                 // Display the combined requests
                 displayAccessRequests(allRequests, requestList);
             } else {
@@ -933,10 +953,12 @@ function loadAccessRequests() {
         });
 }
 
-// Helper function to display access requests
+// Helper function to display access requests - updated to handle empty request list and show force clear option
 function displayAccessRequests(requests, requestList) {
     // Clear any special messages that might be showing
     requestList.innerHTML = '';
+    
+    const clearAllBtn = document.getElementById('clear-all-requests');
     
     if (requests.length === 0) {
         const noItemsMsg = document.createElement('p');
@@ -944,118 +966,122 @@ function displayAccessRequests(requests, requestList) {
         noItemsMsg.textContent = 'No pending access requests.';
         requestList.appendChild(noItemsMsg);
         
-        // Hide the clear all button if there are no requests
-        const clearAllBtn = document.getElementById('clear-all-requests');
+        // Always show clear all button even when no requests are visible
         if (clearAllBtn) {
-            clearAllBtn.style.display = 'none';
+            clearAllBtn.style.display = 'inline-block';
+            
+            // Add informational message about invisible requests
+            const infoMsg = document.createElement('div');
+            infoMsg.className = 'force-cleanup-message';
+            infoMsg.textContent = 'Note: There may be pending requests on the server that are not visible. ' +
+                'Using the "Clear All" button will remove all pending requests, even if they do not appear in this list.';
+            requestList.appendChild(infoMsg);
         }
-        return;
-    }
-    
-    // Show the clear all button since we have requests
-    const clearAllBtn = document.getElementById('clear-all-requests');
-    if (clearAllBtn) {
-        clearAllBtn.style.display = 'block';
-    }
-    
-    // Add each request to the list
-    requests.forEach(request => {
-        // Validate the request data
-        if (!request.ip || !isValidIPAddress(request.ip)) {
-            return; // Skip invalid entries
+    } else {
+        // Show the clear all button since we have requests
+        if (clearAllBtn) {
+            clearAllBtn.style.display = 'inline-block';
         }
         
-        const requestItem = document.createElement('div');
-        requestItem.className = 'request-item';
-        
-        // Format date for display
-        let formattedDate = "Unknown date";
-        
-        if (request.timestamp) {
-            try {
-                const requestDate = new Date(request.timestamp);
-                if (!isNaN(requestDate.getTime())) {
-                    formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
-                }
-            } catch (e) {
-                console.error("Date formatting error:", e);
+        // Add each request to the list
+        requests.forEach(request => {
+            // Validate the request data
+            if (!request.ip || !isValidIPAddress(request.ip)) {
+                return; // Skip invalid entries
             }
-        }
-        
-        // Create request info section
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'request-info';
-        
-        const nameP = document.createElement('p');
-        const nameStrong = document.createElement('strong');
-        nameStrong.textContent = sanitizeInput(request.name);
-        nameP.appendChild(nameStrong);
-        
-        const ipP = document.createElement('p');
-        ipP.textContent = `IP Address: ${sanitizeInput(request.ip)}`;
-        
-        const dateP = document.createElement('p');
-        dateP.textContent = `Requested: ${formattedDate}`;
-        
-        // Add source indicator for local vs server
-        const sourceP = document.createElement('p');
-        if (request.local) {
-            sourceP.textContent = 'Source: This device only';
-            sourceP.style.color = '#ff9800';
-        } else {
-            sourceP.textContent = 'Source: Server';
-            sourceP.style.color = '#4caf50';
-        }
-        
-        infoDiv.appendChild(nameP);
-        infoDiv.appendChild(ipP);
-        infoDiv.appendChild(dateP);
-        infoDiv.appendChild(sourceP);
-        
-        // Create actions section
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'request-actions';
-        
-        const approveBtn = document.createElement('button');
-        approveBtn.className = 'admin-btn approve';
-        approveBtn.textContent = 'Approve';
-        approveBtn.dataset.ip = request.ip;
-        approveBtn.dataset.name = request.name;
-        approveBtn.dataset.row = request.row || '';
-        
-        const rejectBtn = document.createElement('button');
-        rejectBtn.className = 'admin-btn reject';
-        rejectBtn.textContent = 'Reject';
-        rejectBtn.dataset.ip = request.ip;
-        rejectBtn.dataset.row = request.row || '';
-        
-        actionsDiv.appendChild(approveBtn);
-        actionsDiv.appendChild(rejectBtn);
-        
-        // Add to request item
-        requestItem.appendChild(infoDiv);
-        requestItem.appendChild(actionsDiv);
-        
-        requestList.appendChild(requestItem);
-    });
-    
-    // Add event listeners for approve/reject buttons
-    document.querySelectorAll('#request-list .admin-btn.approve').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const ip = this.getAttribute('data-ip');
-            const name = this.getAttribute('data-name');
-            const row = this.getAttribute('data-row');
-            approveAccessRequest(ip, name, row);
+            
+            const requestItem = document.createElement('div');
+            requestItem.className = 'request-item';
+            
+            // Format date for display
+            let formattedDate = "Unknown date";
+            
+            if (request.timestamp) {
+                try {
+                    const requestDate = new Date(request.timestamp);
+                    if (!isNaN(requestDate.getTime())) {
+                        formattedDate = requestDate.toLocaleDateString() + ' ' + requestDate.toLocaleTimeString();
+                    }
+                } catch (e) {
+                    console.error("Date formatting error:", e);
+                }
+            }
+            
+            // Create request info section
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'request-info';
+            
+            const nameP = document.createElement('p');
+            const nameStrong = document.createElement('strong');
+            nameStrong.textContent = sanitizeInput(request.name);
+            nameP.appendChild(nameStrong);
+            
+            const ipP = document.createElement('p');
+            ipP.textContent = `IP Address: ${sanitizeInput(request.ip)}`;
+            
+            const dateP = document.createElement('p');
+            dateP.textContent = `Requested: ${formattedDate}`;
+            
+            // Add source indicator for local vs server
+            const sourceP = document.createElement('p');
+            if (request.local) {
+                sourceP.textContent = 'Source: This device only';
+                sourceP.style.color = '#ff9800';
+            } else {
+                sourceP.textContent = 'Source: Server';
+                sourceP.style.color = '#4caf50';
+            }
+            
+            infoDiv.appendChild(nameP);
+            infoDiv.appendChild(ipP);
+            infoDiv.appendChild(dateP);
+            infoDiv.appendChild(sourceP);
+            
+            // Create actions section
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'request-actions';
+            
+            const approveBtn = document.createElement('button');
+            approveBtn.className = 'admin-btn approve';
+            approveBtn.textContent = 'Approve';
+            approveBtn.dataset.ip = request.ip;
+            approveBtn.dataset.name = request.name;
+            approveBtn.dataset.row = request.row || '';
+            
+            const rejectBtn = document.createElement('button');
+            rejectBtn.className = 'admin-btn reject';
+            rejectBtn.textContent = 'Reject';
+            rejectBtn.dataset.ip = request.ip;
+            rejectBtn.dataset.row = request.row || '';
+            
+            actionsDiv.appendChild(approveBtn);
+            actionsDiv.appendChild(rejectBtn);
+            
+            // Add to request item
+            requestItem.appendChild(infoDiv);
+            requestItem.appendChild(actionsDiv);
+            
+            requestList.appendChild(requestItem);
         });
-    });
-    
-    document.querySelectorAll('#request-list .admin-btn.reject').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const ip = this.getAttribute('data-ip');
-            const row = this.getAttribute('data-row');
-            rejectAccessRequest(ip, row);
+        
+        // Add event listeners for approve/reject buttons
+        document.querySelectorAll('#request-list .admin-btn.approve').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const ip = this.getAttribute('data-ip');
+                const name = this.getAttribute('data-name');
+                const row = this.getAttribute('data-row');
+                approveAccessRequest(ip, name, row);
+            });
         });
-    });
+        
+        document.querySelectorAll('#request-list .admin-btn.reject').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const ip = this.getAttribute('data-ip');
+                const row = this.getAttribute('data-row');
+                rejectAccessRequest(ip, row);
+            });
+        });
+    }
 }
 
 // Approve access request and add IP to whitelist - Updated to use server API

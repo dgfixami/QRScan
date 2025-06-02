@@ -60,6 +60,7 @@
             </div>
             <div class="admin-actions">
                 <button id="clear-all-requests" class="admin-btn danger">Clear All Pending Requests</button>
+                <button id="refresh-requests" class="admin-btn edit">Refresh Requests</button>
             </div>
             <div id="request-list">
                 <!-- Request items will be added here dynamically -->
@@ -193,6 +194,20 @@
                     if (confirm('Are you sure you want to clear all pending access requests? This action cannot be undone.')) {
                         clearAllPendingRequests();
                     }
+                });
+            }
+            
+            // Add event listener for the refresh requests button
+            const refreshRequestsBtn = document.getElementById('refresh-requests');
+            if (refreshRequestsBtn) {
+                refreshRequestsBtn.addEventListener('click', function() {
+                    // Clear any cached request data
+                    sessionStorage.removeItem('cached_access_requests');
+                    
+                    // Force refresh the request list
+                    loadAccessRequests(true); // Pass true to force server refresh
+                    
+                    logAccessAction('Access requests manually refreshed');
                 });
             }
         });
@@ -345,12 +360,16 @@
             // Create the request payload
             const requestData = {
                 action: "clearAllRequests",
-                admin: adminName
+                admin: adminName,
+                forceCleanup: true // Add flag to force cleanup even if no visible requests
             };
             
             // Show loading state
             const requestList = document.getElementById('request-list');
             requestList.innerHTML = '<p class="loading-message">Clearing all requests...</p>';
+            
+            // Always enable the clear button - it will always attempt to clear requests
+            document.getElementById('clear-all-requests').style.display = 'inline-block';
             
             // Send to server
             fetch(scriptUrl, {
@@ -364,19 +383,18 @@
             .then(() => {
                 // Handle local storage cleanup as well
                 const requests = JSON.parse(localStorage.getItem('qrscan_access_requests') || '[]');
-                if (requests.length > 0) {
-                    localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
-                    
-                    // Log the action
-                    logAccessAction(`All pending access requests (${requests.length}) were cleared`);
-                } else {
-                    logAccessAction('Cleared all pending access requests (none found locally)');
-                }
+                localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+                
+                // Clear the cache
+                sessionStorage.removeItem('cached_access_requests');
+                
+                // Log the action regardless of whether requests were found locally
+                logAccessAction(`All pending access requests were cleared (forced cleanup)`);
                 
                 // Show success message and refresh the list
                 requestList.innerHTML = '<p class="success-message">All pending requests have been cleared!</p>';
                 setTimeout(() => {
-                    loadAccessRequests();
+                    loadAccessRequests(true); // Force refresh from server
                 }, 2000);
             })
             .catch(error => {
@@ -384,6 +402,7 @@
                 
                 // Still clear local requests
                 localStorage.setItem('qrscan_access_requests', JSON.stringify([]));
+                sessionStorage.removeItem('cached_access_requests');
                 
                 // Log error
                 logAccessAction('Error clearing requests on server, but local requests were cleared');
@@ -391,7 +410,7 @@
                 // Show error and refresh list
                 requestList.innerHTML = '<p class="error-message">Error clearing requests on server. Local requests have been cleared.</p>';
                 setTimeout(() => {
-                    loadAccessRequests();
+                    loadAccessRequests(true); // Force refresh from server
                 }, 3000);
             });
         }
@@ -478,6 +497,34 @@
             background-color: #ffebee;
             border-radius: 4px;
             border-left: 3px solid #d32f2f;
+        }
+        
+        /* Add styles for the refresh button */
+        .admin-btn.edit {
+            background-color: #2196F3;
+            color: white;
+            margin-left: 10px;
+        }
+        
+        .admin-btn.edit:hover {
+            background-color: #0b7dda;
+        }
+        
+        /* Make both buttons in admin-actions display side by side */
+        .admin-actions {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        /* Add a style for the force-cleanup message */
+        .force-cleanup-message {
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #fff3cd;
+            border-left: 3px solid #ffc107;
+            color: #856404;
+            font-size: 14px;
         }
     </style>
 </body>
