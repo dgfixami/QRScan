@@ -809,209 +809,59 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             logToPage('Getting available cameras...');
             
-            // First check if we have camera permission before even trying to access cameras
-            const permissionStatus = await checkCameraPermission();
-            if (permissionStatus === 'denied') {
-                logToPage('Camera permission denied. Please allow camera access in your browser settings.', 'error');
-                showCameraPermissionHelp();
-                return;
-            }
-            
-            // If permission is granted or prompt, try to get cameras
-            Html5Qrcode.getCameras()
-                .then(devices => {
-                    cameras = devices;
-                    logToPage(`Found ${devices.length} camera(s)`);
-                    console.log("Available cameras:", devices);
+            Html5Qrcode.getCameras().then(devices => {
+                cameras = devices;
+                logToPage(`Found ${devices.length} camera(s)`);
+                console.log("Available cameras:", devices);
+                
+                if (devices && devices.length > 0) {
+                    const backCamera = devices.find(camera => 
+                        /(back|rear|environment)/i.test(camera.label));
                     
-                    if (devices && devices.length > 0) {
-                        // Try to find back camera first (more suitable for QR scanning)
-                        const backCamera = devices.find(camera => 
-                            /(back|rear|environment)/i.test(camera.label));
+                    if (backCamera) {
+                        currentCameraIndex = devices.indexOf(backCamera);
+                        logToPage('Back camera found, using it by default');
+                    }
+                    
+                    if (devices[currentCameraIndex] && 
+                        typeof devices[currentCameraIndex].id === 'string' && 
+                        devices[currentCameraIndex].id.length > 0) {
                         
-                        if (backCamera) {
-                            currentCameraIndex = devices.indexOf(backCamera);
-                            logToPage('Back camera found, using it by default');
-                        }
-                        
-                        if (devices[currentCameraIndex] && 
-                            typeof devices[currentCameraIndex].id === 'string' && 
-                            devices[currentCameraIndex].id.length > 0) {
-                            
-                            startScanner(devices[currentCameraIndex].id);
-                        } else {
-                            logToPage('Using environment facing camera as fallback');
-                            startFallbackScanner();
-                        }
-                        
-                        if (devices.length > 1 && !document.getElementById('switch-camera')) {
-                            addCameraSwitchButton();
-                        }
+                        startScanner(devices[currentCameraIndex].id);
                     } else {
-                        logToPage('No cameras detected, trying alternative method', 'warning');
+                        logToPage('Using environment facing camera as fallback');
                         startFallbackScanner();
                     }
-                })
-                .catch(err => {
-                    logToPage(`Error getting cameras: ${err.message}`, 'error');
-                    // Try to access camera directly without listing
-                    startDirectCameraAccess();
-                });
-        } catch (error) {
-            logToPage(`Camera initialization error: ${error.message}`, 'error');
-            startDirectCameraAccess();
-        }
-    }
-    
-    // New function to check camera permission status
-    async function checkCameraPermission() {
-        try {
-            // For browsers that support permissions API
-            if (navigator.permissions && navigator.permissions.query) {
-                const permissionStatus = await navigator.permissions.query({ name: 'camera' });
-                return permissionStatus.state; // 'granted', 'denied', or 'prompt'
-            }
-            // For browsers that don't support permissions API
-            return 'unknown';
-        } catch (error) {
-            console.log("Permissions API error:", error);
-            return 'unknown'; // If checking fails, assume unknown
-        }
-    }
-    
-    // New function to show help for camera permissions
-    function showCameraPermissionHelp() {
-        const reader = document.getElementById('reader');
-        
-        // Clear reader div content
-        reader.innerHTML = '';
-        
-        // Create permission guidance elements
-        const permissionDiv = document.createElement('div');
-        permissionDiv.className = 'camera-permission-help';
-        
-        const heading = document.createElement('h3');
-        heading.textContent = 'Camera Access Required';
-        
-        const browserName = detectBrowser();
-        const instructions = document.createElement('p');
-        
-        // Provide browser-specific instructions
-        if (browserName === 'Chrome' || browserName === 'Edge') {
-            instructions.innerHTML = 'To enable camera access:<br>1. Click the camera icon in the address bar<br>2. Select "Allow"<br>3. Refresh the page';
-        } else if (browserName === 'Firefox') {
-            instructions.innerHTML = 'To enable camera access:<br>1. Click the lock icon in the address bar<br>2. Select "Allow" for camera<br>3. Refresh the page';
-        } else if (browserName === 'Safari') {
-            instructions.innerHTML = 'To enable camera access:<br>1. Go to Safari preferences<br>2. Select "Websites" tab<br>3. Click "Camera" and allow for this website<br>4. Refresh the page';
-        } else {
-            instructions.innerHTML = 'To enable camera access:<br>1. Check your browser settings to allow camera access for this website<br>2. Refresh the page after enabling';
-        }
-        
-        const refreshButton = document.createElement('button');
-        refreshButton.className = 'retry-button';
-        refreshButton.textContent = 'Refresh Page';
-        refreshButton.addEventListener('click', () => {
-            window.location.reload();
-        });
-        
-        permissionDiv.appendChild(heading);
-        permissionDiv.appendChild(instructions);
-        permissionDiv.appendChild(refreshButton);
-        reader.appendChild(permissionDiv);
-        
-        addRetryButton();
-    }
-    
-    // New function to detect browser type for specific instructions
-    function detectBrowser() {
-        const userAgent = navigator.userAgent.toLowerCase();
-        
-        if (userAgent.indexOf("edge") > -1 || userAgent.indexOf("edg/") > -1) {
-            return "Edge";
-        } else if (userAgent.indexOf("chrome") > -1) {
-            return "Chrome";
-        } else if (userAgent.indexOf("firefox") > -1) {
-            return "Firefox";
-        } else if (userAgent.indexOf("safari") > -1) {
-            return "Safari";
-        } else {
-            return "Unknown";
-        }
-    }
-    
-    // New direct camera access function that bypasses device listing
-    function startDirectCameraAccess() {
-        logToPage('Trying direct camera access method...', 'info');
-        
-        try {
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().catch(err => 
-                    logToPage(`Error stopping previous scanner: ${err.message}`, 'warning')
-                );
-            }
-            
-            html5QrCode = new Html5Qrcode("reader", /* verbose= */ true);
-            
-            // Try with more specific constraints for mobile devices
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-            
-            let constraints = {};
-            
-            if (isMobile) {
-                if (isIOS) {
-                    // iOS specific constraints
-                    constraints = { 
-                        facingMode: { exact: "environment" }
-                    };
+                    
+                    if (devices.length > 1 && !document.getElementById('switch-camera')) {
+                        addCameraSwitchButton();
+                    }
                 } else {
-                    // Android and other mobile
-                    constraints = { 
-                        facingMode: "environment",
-                        aspectRatio: { ideal: 1 }
-                    };
+                    logToPage('No cameras detected, trying alternative method', 'warning');
+                    startFallbackScanner();
                 }
-            } else {
-                // Desktop - try a more generic approach
-                constraints = {
-                    facingMode: "user" // Try user-facing on desktop as fallback
-                };
-            }
-            
-            html5QrCode.start(
-                constraints,
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                    aspectRatio: window.innerWidth > window.innerHeight ? 1.777778 : 0.5625,
-                    disableFlip: false
-                },
-                qrCodeSuccessCallback,
-                qrCodeErrorCallback
-            ).then(() => {
-                logToPage('Direct camera access succeeded', 'success');
-                cameraInitAttempts = 0;
-                
-                let flash = document.querySelector('.camera-flash');
-                if (!flash) {
-                    flash = document.createElement('div');
-                    flash.className = 'camera-flash';
-                    reader.appendChild(flash);
-                }
-                
-                const existingRetryBtn = document.getElementById('retry-camera-btn');
-                if (existingRetryBtn) {
-                    existingRetryBtn.remove();
-                }
-                
             }).catch(err => {
-                logToPage(`Direct camera access failed: ${err.message}`, 'error');
-                startLastResortScanner();
+                logToPage(`Error getting cameras: ${err.message}`, 'error');
+                startFallbackScanner();
             });
         } catch (error) {
-            logToPage(`Direct camera error: ${error.message}`, 'error');
-            startLastResortScanner();
+            logToPage(`Camera initialization error: ${error.message}`, 'error');
+            startFallbackScanner();
         }
+    }
+    
+    function addCameraSwitchButton() {
+        const switchBtn = document.createElement('button');
+        switchBtn.id = 'switch-camera';
+        switchBtn.className = 'retry-button';
+        switchBtn.textContent = 'Switch Camera';
+        switchBtn.addEventListener('click', () => {
+            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+            logToPage(`Switching to camera: ${cameras[currentCameraIndex].label || `Camera ${currentCameraIndex + 1}`}`);
+            startScanner(cameras[currentCameraIndex].id);
+        });
+        
+        reader.parentNode.insertBefore(switchBtn, reader.nextSibling);
     }
     
     function startScanner(cameraId) {
@@ -1032,13 +882,12 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             logToPage(`Initializing scanner with camera ID: ${cameraId}`);
             
-            html5QrCode = new Html5Qrcode("reader", /* verbose= */ true);
+            html5QrCode = new Html5Qrcode("reader");
             
             const config = {
                 fps: 10,
                 qrbox: { width: 250, height: 250 },
-                aspectRatio: window.innerWidth > window.innerHeight ? 1.777778 : 0.5625,
-                disableFlip: false // Allow flipping for better detection
+                aspectRatio: 1.0
             };
             
             html5QrCode.start(
@@ -1071,12 +920,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     startFallbackScanner();
                 } else {
                     showError(`Camera start failed after ${MAX_INIT_ATTEMPTS} attempts`);
-                    startLastResortScanner();
+                    addRetryButton();
                 }
             });
         } catch (error) {
             logToPage(`Scanner initialization error: ${error.message}`, 'error');
-            startLastResortScanner();
+            addRetryButton();
         }
     }
     
@@ -1090,21 +939,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 );
             }
             
-            html5QrCode = new Html5Qrcode("reader", /* verbose= */ true);
-            
-            // Try with different constraints for different devices
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            
-            let facingModeConstraint = isIOS 
-                ? { exact: "environment" }  // iOS needs exact constraint
-                : "environment";            // Android works better with non-exact
+            html5QrCode = new Html5Qrcode("reader");
             
             html5QrCode.start(
-                { facingMode: facingModeConstraint },
+                { facingMode: "environment" },
                 {
                     fps: 10,
                     qrbox: { width: 250, height: 250 },
-                    aspectRatio: window.innerWidth > window.innerHeight ? 1.777778 : 0.5625
+                    aspectRatio: 1.0
                 },
                 qrCodeSuccessCallback,
                 qrCodeErrorCallback
@@ -1121,89 +963,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 
             }).catch(err => {
                 logToPage(`Fallback camera method failed: ${err.message}`, 'error');
-                startLastResortScanner();
-            });
-        } catch (error) {
-            logToPage(`Fallback scanner error: ${error.message}`, 'error');
-            startLastResortScanner();
-        }
-    }
-    
-    // Last resort option when all camera access attempts fail
-    function startLastResortScanner() {
-        try {
-            logToPage('Attempting final fallback method for camera access...', 'warning');
-            
-            // Stop any running scanner
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().catch(err => 
-                    logToPage(`Error stopping previous scanner: ${err.message}`, 'warning')
-                );
-            }
-            
-            // Re-create scanner with minimal constraints
-            html5QrCode = new Html5Qrcode("reader", /* verbose= */ true);
-            
-            // This configuration uses no specific camera preferences
-            // Letting the browser select the camera with maximum compatibility
-            html5QrCode.start(
-                { facingMode: "user" }, // Try user-facing as last resort
-                {
-                    fps: 5, // Lower fps for better performance
-                    qrbox: undefined, // Let scanner decide qrbox
-                    aspectRatio: undefined, // No aspect ratio constraint
-                    disableFlip: false
-                },
-                qrCodeSuccessCallback,
-                qrCodeErrorCallback
-            ).then(() => {
-                logToPage('Last resort camera method succeeded', 'success');
-                
-            }).catch(err => {
-                logToPage('All camera access methods failed', 'error');
-                showError("Could not access camera. Please check your browser settings and permissions.");
-                showBrowserCompatibilityMessage();
+                showError("Could not access camera. Please ensure camera permissions are granted.");
                 addRetryButton();
             });
         } catch (error) {
-            logToPage(`Last resort camera error: ${error.message}`, 'error');
-            showError("Camera initialization failed. Please try a different browser or device.");
-            showBrowserCompatibilityMessage();
+            logToPage(`Fallback scanner error: ${error.message}`, 'error');
+            showError("Camera initialization failed completely. Please try refreshing the page.");
             addRetryButton();
-        }
-    }
-    
-    // Show browser compatibility message
-    function showBrowserCompatibilityMessage() {
-        const reader = document.getElementById('reader');
-        
-        const compatDiv = document.createElement('div');
-        compatDiv.className = 'browser-compatibility-message';
-        compatDiv.style.padding = "15px";
-        compatDiv.style.backgroundColor = "#f8f9fa";
-        compatDiv.style.border = "1px solid #ddd";
-        compatDiv.style.borderRadius = "5px";
-        compatDiv.style.marginTop = "15px";
-        
-        const browserInfo = detectBrowser();
-        
-        compatDiv.innerHTML = `
-            <p><strong>For best results:</strong></p>
-            <ul style="text-align: left; margin-top: 10px;">
-                <li>Use Chrome or Edge on Android</li>
-                <li>Use Safari on iOS</li>
-                <li>Make sure camera permissions are granted</li>
-                <li>Try using the app in a well-lit area</li>
-            </ul>
-            <p style="margin-top: 10px;">Your current browser: ${browserInfo}</p>
-        `;
-        
-        // Add to DOM after any retry button
-        const retryBtn = document.getElementById('retry-camera-btn');
-        if (retryBtn && retryBtn.parentNode) {
-            retryBtn.parentNode.insertBefore(compatDiv, retryBtn.nextSibling);
-        } else {
-            reader.appendChild(compatDiv);
         }
     }
     
@@ -1216,27 +982,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const retryBtn = document.createElement('button');
         retryBtn.id = 'retry-camera-btn';
         retryBtn.className = 'retry-button';
-        retryBtn.textContent = 'Retry Camera Access';
+        retryBtn.textContent = 'Retry Camera';
         retryBtn.addEventListener('click', () => {
             logToPage('Manual camera retry requested', 'info');
             cameraInitAttempts = 0;
-            
-            // Clear any error content
-            const reader = document.getElementById('reader');
-            const permissionHelp = reader.querySelector('.camera-permission-help');
-            if (permissionHelp) {
-                permissionHelp.remove();
-            }
-            const compatMessage = reader.querySelector('.browser-compatibility-message');
-            if (compatMessage) {
-                compatMessage.remove();
-            }
-            
-            // Restart camera initialization from scratch
             initializeCameras();
         });
         
-        const reader = document.getElementById('reader');
         reader.parentNode.insertBefore(retryBtn, reader);
     }
     
