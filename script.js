@@ -4,22 +4,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const codeValue = document.getElementById('code-value');
     const reader = document.getElementById('reader');
     const logMessages = document.getElementById('log-messages');
-    const logoutBtn = document.getElementById('logout-btn');
-    
-    // Update logout button to just clear session storage (not localStorage)
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', function() {
-            // Just redirect to login page, keep IP in whitelist
-            window.location.href = 'login.html';
-        });
-    }
-    
-    // Display user name from session storage if available
-    const userDisplayName = document.getElementById('user-display-name');
-    if (userDisplayName) {
-        const userName = sessionStorage.getItem('user_name') || 'User';
-        userDisplayName.textContent = userName;
-    }
     
     // Scan result elements
     const scanName = document.getElementById('scan-name');

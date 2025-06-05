@@ -5,97 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Add Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com/html5-qrcode 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.ipify.org https://script.google.com/macros/ blob:; media-src 'self' blob:;">
-    <script>
-        // Inline script to immediately check access before loading content
-        (function() {
-            // Debug logging
-            console.log("Index.html access check started");
-            
-            // If admin is logged in, they can always access
-            const currentAdmin = JSON.parse(localStorage.getItem('qrscan_current_admin'));
-            if (currentAdmin) {
-                console.log("Admin detected in index.html, allowing access");
-                // Set admin access flag to prevent later redirects
-                sessionStorage.setItem('admin_access', 'true');
-                sessionStorage.setItem('access_verified', 'true');
-                return; // Admin can access
-            }
-            
-            // Record that we had verified access at some point (for revocation detection)
-            if (sessionStorage.getItem('access_verified') === 'true') {
-                sessionStorage.setItem('was_verified', 'true');
-            }
-            
-            // Check for access verified flag 
-            const accessVerified = sessionStorage.getItem('access_verified');
-            if (accessVerified === 'true') {
-                console.log("Access already verified by flag");
-                
-                // Check if verification is recent (within last hour)
-                const accessTimestamp = parseInt(sessionStorage.getItem('access_timestamp') || '0');
-                const now = new Date().getTime();
-                const oneHourMs = 60 * 60 * 1000;
-                
-                if (now - accessTimestamp < oneHourMs) {
-                    // Check when we last verified access to prevent too frequent checks
-                    const lastCheck = parseInt(sessionStorage.getItem('last_access_check') || '0');
-                    const timeSinceLastCheck = now - lastCheck;
-                    const minimumCheckInterval = 10 * 1000; // 10 seconds
-                    
-                    // If we checked recently, don't re-check
-                    if (lastCheck > 0 && timeSinceLastCheck < minimumCheckInterval) {
-                        console.log("Access verification is recent, allowing access");
-                        return; // Recent access verification, no need to re-check
-                    }
-                    
-                    // Update last check timestamp
-                    sessionStorage.setItem('last_access_check', now.toString());
-                    
-                    // Perform an extra verification of the IP in the whitelist
-                    const userIp = sessionStorage.getItem('user_ip');
-                    if (userIp) {
-                        // Force a fresh check by clearing any cached result
-                        sessionStorage.removeItem('ip_whitelist_status');
-                        
-                        // Check if IP is still in the whitelist
-                        const whitelist = JSON.parse(localStorage.getItem('qrscan_ip_whitelist')) || [];
-                        const stillWhitelisted = whitelist.some(entry => entry.ip === userIp && entry.approved);
-                        
-                        if (!stillWhitelisted) {
-                            console.log("IP no longer in whitelist - access revoked");
-                            sessionStorage.removeItem('access_verified');
-                            sessionStorage.removeItem('access_timestamp');
-                            window.location.href = 'request-access.html?revoked=true';
-                            return;
-                        }
-                    }
-                    
-                    console.log("Access verification confirmed, allowing access");
-                    return; // Access recently verified
-                } else {
-                    console.log("Access verification expired, rechecking");
-                }
-            }
-            
-            console.log("Access not verified, redirecting to auth-check");
-            // Otherwise redirect to auth check
-            window.location.href = 'auth-check.html';
-        })();
-    </script>
 </head>
 <body>
     <div class="container">
-        <div class="header-bar">
-            <h1>QR Code Scanner</h1>
-            <div class="header-actions">
-                <div id="user-info" class="user-info-display">
-                    <span id="user-display-name">User</span>
-                </div>
-                <button id="logout-btn" class="logout-button">Exit</button>
-            </div>
-        </div>
+        <h1>QR Code Scanner</h1>
         
         <div class="toggle-container">
             <div class="toggle-with-labels">
@@ -145,7 +58,6 @@
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="auth.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
