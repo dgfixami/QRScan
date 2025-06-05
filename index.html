@@ -10,14 +10,11 @@
     <div class="container">
         <h1>QR Code Scanner</h1>
         
-        <div class="toggle-container">
-            <div class="toggle-with-labels">
-                <span class="toggle-label left-label">Check-in</span>
-                <label class="toggle">
-                    <input type="checkbox" id="mode-toggle">
-                    <span class="slider"></span>
-                </label>
-                <span class="toggle-label right-label">Goodie Bag</span>
+        <div class="mode-selector-container">
+            <div class="mode-selector">
+                <button class="mode-button active" data-mode="Check-in">Check-in</button>
+                <button class="mode-button" data-mode="Goodie Bag">Goodie Bag</button>
+                <button class="mode-button" data-mode="Contest">Contest</button>
             </div>
         </div>
         
@@ -36,6 +33,7 @@
                 <div id="scan-statuses">
                     <p class="scan-status hidden" id="checkin-status">Check-in: <span id="checkin-status-value">-</span></p>
                     <p class="scan-status hidden" id="goodiebag-status">Goodie Bag: <span id="goodiebag-status-value">-</span></p>
+                    <p class="scan-status hidden" id="contest-status">Contest: <span id="contest-status-value">-</span></p>
                 </div>
             </div>
             

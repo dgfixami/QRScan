@@ -13,7 +13,7 @@ function doGet(e) {
   return ContentService.createTextOutput("QR Code API is running");
 }
 
-// Update handleLookup function for new column structure
+// Update handleLookup function for new column structure including Contest
 function handleLookup(code) {
   try {
     // Get the active spreadsheet
@@ -40,14 +40,15 @@ function handleLookup(code) {
     }
     
     // Get the row data (adjust column range as needed for your sheet)
-    // Expand the range to include name (column F), email (column G) and timestamp (column H)
-    const rowData = sheet.getRange(foundRow, 1, 1, 8).getValues()[0];
+    // Expand the range to include name (column F), email (column G), timestamp (column H), and Contest columns (I & J)
+    const rowData = sheet.getRange(foundRow, 1, 1, 10).getValues()[0];
     
     // Format dates for consistent display
     const timezone = spreadsheet.getSpreadsheetTimeZone();
     let checkInTime = rowData[2] || ""; // Column C (was column J)
     let goodieBagTime = rowData[4] || ""; // Column E (was column L)
-    let timestamp = rowData[7] || ""; // Column H (timestamp)
+    let contestTime = rowData[6] || ""; // Column G (Contest time)
+    let timestamp = rowData[9] || ""; // Column J (timestamp)
     
     // Only format if they are date objects
     if (checkInTime instanceof Date && !isNaN(checkInTime.getTime())) {
@@ -58,6 +59,10 @@ function handleLookup(code) {
       goodieBagTime = Utilities.formatDate(goodieBagTime, timezone, "dd/MM/yyyy HH:mm:ss");
     }
     
+    if (contestTime instanceof Date && !isNaN(contestTime.getTime())) {
+      contestTime = Utilities.formatDate(contestTime, timezone, "dd/MM/yyyy HH:mm:ss");
+    }
+    
     if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
       // Get day of the week
       const dayOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][timestamp.getDay()];
@@ -65,16 +70,18 @@ function handleLookup(code) {
       timestamp = dayOfWeek + " " + formattedDate; // Format with day name
     }
     
-    // Format the data for response with new column structure
+    // Format the data for response with new column structure including Contest
     const attendeeData = {
       code: rowData[0] || "", // Column A (QR Code)
       isCheckedIn: rowData[1] || false, // Column B (Check-in)
       checkInTime: checkInTime, // Column C (Check-in time)
       hasGoodieBag: rowData[3] || false, // Column D (Goodie bag)
       goodieBagTime: goodieBagTime, // Column E (Goodie bag time)
-      name: rowData[5] || "", // Column F (Name)
-      email: rowData[6] || "", // Column G (Email)
-      timestamp: timestamp // Column H (Timestamp)
+      inContest: rowData[5] || false, // Column F (Contest entry)
+      contestTime: contestTime, // Column G (Contest entry time)
+      name: rowData[7] || "", // Column H (Name)
+      email: rowData[8] || "", // Column I (Email)
+      timestamp: timestamp // Column J (Timestamp)
     };
     
     // Return the data
@@ -86,7 +93,7 @@ function handleLookup(code) {
   }
 }
 
-// Define the doPost function to handle POST requests with new column structure
+// Define the doPost function to handle POST requests with updated column structure for Contest
 function doPost(e) {
   try {
     // Parse the incoming data
@@ -167,6 +174,24 @@ function doPost(e) {
         Logger.log("Updated Goodie Bag status and timestamp for code: " + data.code + " in row " + foundRow);
       } else {
         Logger.log("Goodie Bag already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
+      }
+    } else if (data.mode === "Contest") {
+      // Check if checkbox in column F is already set
+      const currentContestValue = sheet.getRange(foundRow, 6).getValue();
+      if (!currentContestValue) {
+        // Only set checkbox if it's not already checked
+        sheet.getRange(foundRow, 6).setValue(true);
+        
+        // Check if timestamp in column G is empty
+        const currentContestTime = sheet.getRange(foundRow, 7).getValue();
+        if (!currentContestTime) {
+          // Only set timestamp if it's empty
+          sheet.getRange(foundRow, 7).setValue(timestamp);
+        }
+        
+        Logger.log("Updated Contest status and timestamp for code: " + data.code + " in row " + foundRow);
+      } else {
+        Logger.log("Contest entry already recorded for code: " + data.code + " in row " + foundRow + ", not overwriting data");
       }
     } else {
       return createResponse(false, "Invalid mode: " + data.mode);
