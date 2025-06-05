@@ -220,6 +220,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Add a fallback protection to ensure buttons are always re-enabled
+    function ensureUIUnlocked() {
+        // Check if the scanner is locked
+        if (isScanning) {
+            isScanning = false;
+            logToPage('Scanner unlocked by safety check', 'warning');
+        }
+        
+        // Check if any buttons are in disabled state and unlock them if needed
+        let anyLocked = false;
+        modeButtons.forEach(btn => {
+            if (btn.disabled) {
+                btn.disabled = false;
+                btn.classList.remove('disabled');
+                anyLocked = true;
+            }
+        });
+        
+        if (anyLocked) {
+            logToPage('Buttons re-enabled by safety check', 'info');
+        }
+    }
+    
     // Add a function to check if a code is eligible for a goodie bag
     function isGoodieBagEligible(code) {
         // Check if code contains "GB" (case insensitive)
