@@ -635,36 +635,3 @@ img[alt="Info icon"] {
 .contest-button:hover {
     background-color: #F57C00;
 }
-
-/* New styles for cooldown indicator */
-.cooldown-indicator {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    font-size: 60px;
-    font-weight: bold;
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    animation: pulse 1s infinite alternate;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-}
-
-@keyframes pulse {
-    from {
-        transform: translate(-50%, -50%) scale(0.95);
-        opacity: 0.8;
-    }
-    to {
-        transform: translate(-50%, -50%) scale(1.05);
-        opacity: 1;
-    }
-}
