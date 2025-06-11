@@ -3,7 +3,7 @@
  * with the latest data from the Bloomreach API
  */
 function updateBloomreachReport() {
-  var url = "https://api.eu1.exponea.com/data/v2/projects/b9f7648e-b449-11ed-9af1-72d440a9cf25/analyses/report"
+  var url = PropertiesService.getScriptProperties().getProperty("Bloomreach_reporturl");
   var payload = {
     "analysis_id": "6814bdbb89ce7cb036eb74b4",
     "timezone": "Europe/Amsterdam",
@@ -11,8 +11,8 @@ function updateBloomreachReport() {
   };
 
   // API credentials
- var apiKeyId = "qgxmkbkmg5vb1k5uf7kmahoiu6kvu94w35fr3xxplvvsmixex24ghbxqahofoabs";
- var apiSecret = "9fajdz823o77jonn292fhrijufma95mx3193l8h9d7c2hhc8hhk2d9ayrx5zz4cw";
+ var apiKeyId = PropertiesService.getScriptProperties().getProperty("Bloomreach_apiKeyId");
+ var apiSecret = PropertiesService.getScriptProperties().getProperty("Bloomreach_apiSecret");
   var credentials = apiKeyId + ":" + apiSecret;
   var encodedCredentials = Utilities.base64Encode(credentials);
 
