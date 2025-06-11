@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function() {
             lockScanner();
             
             // Add safety timeout to ensure unlock happens no matter what
-            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
+            setTimeout(ensureUIUnlocked, 20000); // 15 seconds safety timeout
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
