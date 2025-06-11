@@ -39,11 +39,15 @@ function handleAttendeeSearch(code) {
       return createResponse(false, "QR code not found in spreadsheet");
     }
     
+    // Get timestamp from column A
+    const timestamp = sheet.getRange(foundRow, 1).getValue();
+    
     // Get the attendee data from columns B, C, and D (shifted from A, B, C)
     const rowData = sheet.getRange(foundRow, 2, 1, 3).getValues()[0];
     
     // Format the data for response
     const attendeeData = {
+      timestamp: timestamp || "", // Add timestamp from column A
       firstname: rowData[0] || "", // Column B (was A)
       lastname: rowData[1] || "",  // Column C (was B)
       email: rowData[2] || ""      // Column D (was C)
