@@ -257,6 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Lock the scanner during lookup to prevent mode switching
+        lockScanner();
+        
         logToPage(`Looking up code: ${code}...`, 'info');
         
         // Make the code fill the scan result area too
@@ -271,6 +274,60 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Fetch data from Google Sheets
         fetchAttendeeData(code);
+    }
+    
+    // Function to fetch attendee data from Google Sheets for manual lookup only
+    function fetchAttendeeData(code) {
+        // Show that we're loading
+        lookupResult.innerHTML = '<div class="loading">Loading...</div>';
+        lookupResult.classList.remove('hidden');
+        
+        // First get check-in/goodie bag status from first API
+        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    showLookupError(data.message || 'Failed to find check-in status');
+                    logToPage(`Lookup failed: ${data.message}`, 'error');
+                    unlockScanner(); // Unlock scanner on error
+                    return null;
+                }
+                
+                const checkInData = data.data;
+                
+                // Then get attendee details from second API
+                return fetchAttendeeDetails(code)
+                    .then(attendeeDetails => {
+                        // Combine data from both APIs
+                        const combinedData = {
+                            ...checkInData,
+                            name: attendeeDetails.name,
+                            email: attendeeDetails.email,
+                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
+                        };
+                        
+                        // Display the combined data
+                        displayAttendeeData(combinedData);
+                        logToPage(`Successfully retrieved data for code: ${code}`, 'success');
+                        unlockScanner(); // Unlock scanner after successful lookup
+                    })
+                    .catch(error => {
+                        // If we can't get attendee details, still show check-in data
+                        displayAttendeeData({
+                            ...checkInData,
+                            name: "Unknown",
+                            email: "Unknown",
+                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
+                        });
+                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
+                        unlockScanner(); // Unlock scanner after partial success
+                    });
+            })
+            .catch(error => {
+                showLookupError('Error connecting to database');
+                logToPage(`Lookup error: ${error.message}`, 'error');
+                unlockScanner(); // Unlock scanner on error
+            });
     }
     
     // New function to fetch attendee details from the second API
@@ -313,56 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 logToPage(`Error fetching attendee details: ${error.message}`, 'error');
                 throw error; // Re-throw to be handled by the caller
-            });
-    }
-    
-    // Function to fetch attendee data from Google Sheets for manual lookup only
-    function fetchAttendeeData(code) {
-        // Show that we're loading
-        lookupResult.innerHTML = '<div class="loading">Loading...</div>';
-        lookupResult.classList.remove('hidden');
-        
-        // First get check-in/goodie bag status from first API
-        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    showLookupError(data.message || 'Failed to find check-in status');
-                    logToPage(`Lookup failed: ${data.message}`, 'error');
-                    return null;
-                }
-                
-                const checkInData = data.data;
-                
-                // Then get attendee details from second API
-                return fetchAttendeeDetails(code)
-                    .then(attendeeDetails => {
-                        // Combine data from both APIs
-                        const combinedData = {
-                            ...checkInData,
-                            name: attendeeDetails.name,
-                            email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
-                        };
-                        
-                        // Display the combined data
-                        displayAttendeeData(combinedData);
-                        logToPage(`Successfully retrieved data for code: ${code}`, 'success');
-                    })
-                    .catch(error => {
-                        // If we can't get attendee details, still show check-in data
-                        displayAttendeeData({
-                            ...checkInData,
-                            name: "Unknown",
-                            email: "Unknown",
-                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
-                        });
-                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
-                    });
-            })
-            .catch(error => {
-                showLookupError('Error connecting to database');
-                logToPage(`Lookup error: ${error.message}`, 'error');
             });
     }
     
@@ -521,9 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sendToGoogleSheets(scanData, () => {
             // After successful action, refresh the lookup data
             fetchAttendeeData(code);
-            
-            // Unlock the scanner
-            unlockScanner();
+            // Note: We don't unlock the scanner here because fetchAttendeeData will handle that
         });
     }
     
@@ -543,9 +548,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => {
             // Due to no-cors mode, we won't get a proper response to parse
             logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
-            
-            // Remove success alerts but keep in logs
-            // No more alerts for successful operations
             
             // Execute callback if provided
             if (typeof callback === 'function') {
@@ -569,37 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Show lookup error
-    function showLookupError(message) {
-        lookupResult.innerHTML = `
-            <div class="lookup-error">
-                <p>⚠️ ${message}</p>
-            </div>
-        `;
-        lookupResult.classList.remove('hidden');
-    }
-    
-    // Function to log messages to the page
-    function logToPage(message, type = 'info') {
-        if (message === undefined) {
-            message = "Unknown error occurred (undefined message)";
-            type = 'warning';
-        } else if (message === '') {
-            message = "Empty message received";
-            type = 'warning';
-        }
-        
-        const logEntry = document.createElement('div');
-        logEntry.className = `log-entry ${type}`;
-        
-        const timestamp = new Date().toLocaleTimeString();
-        logEntry.textContent = `${timestamp}: ${message}`;
-        
-        logMessages.prepend(logEntry);
-        console.log(`[${type.toUpperCase()}] ${message}`);
-    }
-    
-    // Success callback when QR code is scanned - updated to allow all codes for Contest mode
+    // Success callback when QR code is scanned - updated to prevent multiple scans
     function qrCodeSuccessCallback(decodedText) {
         // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
@@ -611,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
             lockScanner();
             
             // Add safety timeout to ensure unlock happens no matter what
-            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
+            setTimeout(ensureUIUnlocked, 30000); // Increased to 30 seconds safety timeout for longer operations
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
@@ -657,7 +629,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Updated function to fetch and display attendee data for the scan result section
+    // Modified function to fetch attendee data for the scan result section
     function fetchAttendeeDataForScan(code, scanData) {
         // Show loading state
         scanName.textContent = "Loading...";
@@ -691,10 +663,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after operation, even on partial failure
+                    if (scanData) {
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation, even on partial failure
+                            unlockScanner();
+                        });
+                    } else {
+                        // Just unlock the scanner without sending data
                         unlockScanner();
-                    });
+                    }
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -742,10 +719,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation
+                        if (scanData) {
+                            sendToGoogleSheets(scanData, () => {
+                                // Unlock scanner after operation
+                                unlockScanner();
+                            });
+                        } else {
+                            // Just unlock the scanner without sending data
                             unlockScanner();
-                        });
+                        }
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
@@ -767,9 +749,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.className = "error-text";
                 
                 // Make sure to unlock scanner even on connection error
-                sendToGoogleSheets(scanData, () => {
+                if (scanData) {
+                    sendToGoogleSheets(scanData, () => {
+                        unlockScanner();
+                    });
+                } else {
                     unlockScanner();
-                });
+                }
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
@@ -855,124 +841,6 @@ document.addEventListener('DOMContentLoaded', function() {
         contestStatus.classList.add('hidden');
         contestStatusValue.textContent = "-";
         contestStatusValue.className = "";
-    }
-    
-    // Updated fetchAttendeeDataForScan to handle Contest data
-    function fetchAttendeeDataForScan(code, scanData) {
-        // Show loading state
-        scanName.textContent = "Loading...";
-        scanCompany.textContent = "Loading...";
-        scanTimestamp.textContent = "Loading...";
-        
-        // Reset and hide all status elements during loading
-        checkinStatus.classList.add('hidden');
-        goodiebagStatus.classList.add('hidden');
-        contestStatus.classList.add('hidden');
-        
-        // First get check-in/goodie bag/contest status from first API
-        fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    // Reset scan result fields if there was an error
-                    resetScanResultFields();
-                    
-                    // Show error for all statuses
-                    checkinStatus.classList.remove('hidden');
-                    checkinStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
-                    checkinStatusValue.className = "error-text";
-                    
-                    goodiebagStatus.classList.remove('hidden');
-                    goodiebagStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
-                    goodiebagStatusValue.className = "error-text";
-                    
-                    contestStatus.classList.remove('hidden');
-                    contestStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
-                    contestStatusValue.className = "error-text";
-                    
-                    // Still try to process the scan
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after operation, even on partial failure
-                        unlockScanner();
-                    });
-                    
-                    logToPage(`Lookup failed for scan: ${data.message}`, 'error');
-                    return;
-                }
-                
-                const checkInData = data.data;
-                
-                // Then get attendee details from second API
-                fetchAttendeeDetails(code)
-                    .then(attendeeDetails => {
-                        // Combine data from both APIs
-                        const combinedData = {
-                            ...checkInData,
-                            name: attendeeDetails.name,
-                            email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp, // Use timestamp from attendeeDetails
-                            code: code // Add code to combined data for eligibility check
-                        };
-                        
-                        // Display the combined data
-                        updateScanResultWithAttendeeData(combinedData);
-                        
-                        // Now perform the actual scan operation (check-in or goodie bag)
-                        // Only if scanData is not null (null means ineligible for goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after successful operation and response
-                                unlockScanner();
-                            });
-                        } else {
-                            // Just unlock the scanner without sending data
-                            unlockScanner();
-                        }
-                        
-                        // Log success
-                        logToPage(`Retrieved attendee info for: ${code}`, 'success');
-                    })
-                    .catch(error => {
-                        // If we can't get attendee details, still show check-in data with unknown name/email
-                        updateScanResultWithAttendeeData({
-                            ...checkInData,
-                            name: "Unknown",
-                            email: "Unknown",
-                            timestamp: "Unknown" // Use "Unknown" instead of current timestamp
-                        });
-                        
-                        // Now perform the actual scan operation (check-in or goodie bag)
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation
-                            unlockScanner();
-                        });
-                        
-                        logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
-                    });
-            })
-            .catch(error => {
-                resetScanResultFields();
-                
-                // Show connection error for all statuses
-                checkinStatus.classList.remove('hidden');
-                checkinStatusValue.textContent = "Error connecting to database";
-                checkinStatusValue.className = "error-text";
-                
-                goodiebagStatus.classList.remove('hidden');
-                goodiebagStatusValue.textContent = "Error connecting to database";
-                goodiebagStatusValue.className = "error-text";
-                
-                contestStatus.classList.remove('hidden');
-                contestStatusValue.textContent = "Error connecting to database";
-                contestStatusValue.className = "error-text";
-                
-                // Make sure to unlock scanner even on connection error
-                sendToGoogleSheets(scanData, () => {
-                    unlockScanner();
-                });
-                
-                logToPage(`Error fetching attendee data: ${error.message}`, 'error');
-            });
     }
     
     // Initialize camera and other components
