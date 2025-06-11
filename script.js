@@ -208,10 +208,47 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // New function to unlock scanner - updated to re-enable mode buttons
+    // Modified function to unlock scanner with cooldown period
     function unlockScanner() {
+        // Don't set isScanning to false yet - will be done after cooldown
+        logToPage('Scan complete - cooldown period starting (3s)', 'info');
+        
+        // Show visual cooldown indicator
+        const cooldownIndicator = document.createElement('div');
+        cooldownIndicator.id = 'cooldown-indicator';
+        cooldownIndicator.className = 'cooldown-indicator';
+        cooldownIndicator.textContent = '3';
+        
+        // Add cooldown overlay to reader area
+        const readerArea = document.getElementById('reader');
+        if (readerArea) {
+            readerArea.appendChild(cooldownIndicator);
+        }
+        
+        // Start countdown
+        let secondsLeft = 3;
+        const countdownInterval = setInterval(() => {
+            secondsLeft--;
+            if (cooldownIndicator) {
+                cooldownIndicator.textContent = secondsLeft;
+            }
+            
+            if (secondsLeft <= 0) {
+                clearInterval(countdownInterval);
+                completeUnlockAfterCooldown();
+                
+                // Remove the cooldown indicator
+                if (cooldownIndicator && cooldownIndicator.parentNode) {
+                    cooldownIndicator.parentNode.removeChild(cooldownIndicator);
+                }
+            }
+        }, 1000);
+    }
+    
+    // New function to complete the unlock after cooldown period
+    function completeUnlockAfterCooldown() {
         isScanning = false;
-        logToPage('Scanner unlocked - ready for next scan', 'info');
+        logToPage('Cooldown complete - scanner ready for next scan', 'info');
         
         // Re-enable mode buttons after scanning completes
         modeButtons.forEach(btn => {
@@ -224,6 +261,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function ensureUIUnlocked() {
         // Check if the scanner is locked
         if (isScanning) {
+            // Remove any cooldown indicators that might be present
+            const cooldownIndicator = document.getElementById('cooldown-indicator');
+            if (cooldownIndicator && cooldownIndicator.parentNode) {
+                cooldownIndicator.parentNode.removeChild(cooldownIndicator);
+            }
+            
             isScanning = false;
             logToPage('Scanner unlocked by safety check', 'warning');
         }
