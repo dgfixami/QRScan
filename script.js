@@ -37,10 +37,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // New variable to track if a scan is in process
     let isScanning = false;
-    // NEW: Add variable to track active API requests
-    let activeApiRequest = false;
-    // NEW: Add reference to the safety timeout
-    let safetyTimeout = null;
     
     // Google Apps Script web app URLs - one for check-in/goodie bag/contest, one for attendee details
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbxLj2Yh4GAhePBdGhAC53n3KOJF9gNs5BGvlvTsFvYEz6KGjZFjQ7avEJvkRcYz8kSF/exec';
@@ -200,11 +196,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // New function to lock scanner - updated to disable mode buttons and track API state
+    // New function to lock scanner - updated to disable mode buttons
     function lockScanner() {
         isScanning = true;
-        // NEW: Set the activeApiRequest flag to true
-        activeApiRequest = true;
         logToPage('Scanner locked - processing current scan', 'info');
         
         // Disable mode buttons during scanning
@@ -212,34 +206,10 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
             btn.classList.add('disabled');
         });
-        
-        // NEW: Add visual indication that scanning is locked
-        const reader = document.getElementById('reader');
-        if (reader) {
-            reader.classList.add('scanning-locked');
-            
-            // Create or update overlay if it doesn't exist
-            let overlay = document.querySelector('.scanner-lock-overlay');
-            if (!overlay) {
-                overlay = document.createElement('div');
-                overlay.className = 'scanner-lock-overlay';
-                overlay.innerHTML = '<div class="lock-message">Processing... Please wait</div><div class="lock-spinner"></div>';
-                reader.appendChild(overlay);
-            } else {
-                overlay.style.display = 'flex';
-            }
-        }
-        
-        // NEW: Clear any existing safety timeout to avoid premature unlocking
-        if (safetyTimeout) {
-            clearTimeout(safetyTimeout);
-        }
     }
     
-    // New function to unlock scanner - updated to re-enable mode buttons and reset API state
+    // New function to unlock scanner - updated to re-enable mode buttons
     function unlockScanner() {
-        // NEW: Reset the activeApiRequest flag
-        activeApiRequest = false;
         isScanning = false;
         logToPage('Scanner unlocked - ready for next scan', 'info');
         
@@ -248,58 +218,28 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = false;
             btn.classList.remove('disabled');
         });
-        
-        // NEW: Remove visual indication that scanning is locked
-        const reader = document.getElementById('reader');
-        if (reader) {
-            reader.classList.remove('scanning-locked');
-            const overlay = document.querySelector('.scanner-lock-overlay');
-            if (overlay) {
-                overlay.style.display = 'none';
-            }
-        }
-        
-        // NEW: Clear any existing safety timeout
-        if (safetyTimeout) {
-            clearTimeout(safetyTimeout);
-            safetyTimeout = null;
-        }
     }
     
     // Add a fallback protection to ensure buttons are always re-enabled
     function ensureUIUnlocked() {
-        // NEW: Only unlock if there's no active API request
-        if (isScanning && !activeApiRequest) {
+        // Check if the scanner is locked
+        if (isScanning) {
             isScanning = false;
             logToPage('Scanner unlocked by safety check', 'warning');
-            
-            // Check if any buttons are in disabled state and unlock them if needed
-            let anyLocked = false;
-            modeButtons.forEach(btn => {
-                if (btn.disabled) {
-                    btn.disabled = false;
-                    btn.classList.remove('disabled');
-                    anyLocked = true;
-                }
-            });
-            
-            if (anyLocked) {
-                logToPage('Buttons re-enabled by safety check', 'info');
+        }
+        
+        // Check if any buttons are in disabled state and unlock them if needed
+        let anyLocked = false;
+        modeButtons.forEach(btn => {
+            if (btn.disabled) {
+                btn.disabled = false;
+                btn.classList.remove('disabled');
+                anyLocked = true;
             }
-            
-            // NEW: Remove visual indication that scanning is locked
-            const reader = document.getElementById('reader');
-            if (reader) {
-                reader.classList.remove('scanning-locked');
-                const overlay = document.querySelector('.scanner-lock-overlay');
-                if (overlay) {
-                    overlay.style.display = 'none';
-                }
-            }
-        } else if (isScanning && activeApiRequest) {
-            // NEW: If there's still an active API request, extend the safety timeout
-            logToPage('API request still in progress, extending safety timeout', 'warning');
-            safetyTimeout = setTimeout(ensureUIUnlocked, 15000); // Add another 15 seconds
+        });
+        
+        if (anyLocked) {
+            logToPage('Buttons re-enabled by safety check', 'info');
         }
     }
     
@@ -336,9 +276,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // New function to fetch attendee details from the second API
     function fetchAttendeeDetails(code) {
         logToPage(`Fetching attendee details for code: ${code}`, 'info');
-        
-        // NEW: Set activeApiRequest to true
-        activeApiRequest = true;
         
         return fetch(`${attendeeApiUrl}?code=${encodeURIComponent(code)}`)
             .then(response => {
@@ -590,13 +527,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Modified function to send data to Google Sheets with callback and proper promise handling
+    // Modified function to send data to Google Sheets with callback
     function sendToGoogleSheets(scanData, callback) {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
-        
-        // NEW: Set activeApiRequest flag to true to indicate ongoing API call
-        activeApiRequest = true;
         
         fetch(scriptUrl, {
             method: 'POST',
@@ -610,8 +544,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Due to no-cors mode, we won't get a proper response to parse
             logToPage(`Data sent to Google Sheets. ${scanData.mode} status updated.`, 'success');
             
-            // NEW: Mark API request as completed
-            activeApiRequest = false;
+            // Remove success alerts but keep in logs
+            // No more alerts for successful operations
             
             // Execute callback if provided
             if (typeof callback === 'function') {
@@ -625,9 +559,6 @@ document.addEventListener('DOMContentLoaded', function() {
             logToPage(`Error sending to Google Sheets: ${error.message}`, 'error');
             // Keep error alert to notify user of failures
             alert(`⚠️ Error processing ${scanData.mode} for code: ${scanData.code}`);
-            
-            // NEW: Mark API request as completed even on error
-            activeApiRequest = false;
             
             // Unlock the scanner even on error
             if (typeof callback === 'function') {
@@ -668,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log(`[${type.toUpperCase()}] ${message}`);
     }
     
-    // Success callback when QR code is scanned - updated to improve the locking mechanism
+    // Success callback when QR code is scanned - updated to allow all codes for Contest mode
     function qrCodeSuccessCallback(decodedText) {
         // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
@@ -679,15 +610,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Lock the scanner immediately
             lockScanner();
             
-            // NEW: Set a safety timeout that checks for active API requests before unlocking
-            safetyTimeout = setTimeout(() => {
-                if (activeApiRequest) {
-                    logToPage('API request still in progress, maintaining lock', 'warning');
-                } else {
-                    logToPage('Safety timeout reached but no active API request', 'warning');
-                    ensureUIUnlocked();
-                }
-            }, 15000); // 15 seconds safety timeout
+            // Add safety timeout to ensure unlock happens no matter what
+            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
@@ -728,10 +652,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             logToPage(`Error processing scan: ${error.message}`, 'error');
             resetScanResultFields();
-            
-            // NEW: Reset the API request flag on error
-            activeApiRequest = false;
-            
             // Make sure to unlock the scanner on error
             unlockScanner();
         }
@@ -749,17 +669,9 @@ document.addEventListener('DOMContentLoaded', function() {
         goodiebagStatus.classList.add('hidden');
         contestStatus.classList.add('hidden');
         
-        // NEW: Set activeApiRequest to true to indicate ongoing API call
-        activeApiRequest = true;
-        
         // First get check-in/goodie bag/contest status from first API
         fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 if (!data.success) {
                     // Reset scan result fields if there was an error
@@ -778,18 +690,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
                     contestStatusValue.className = "error-text";
                     
-                    // NEW: Mark API request as completed
-                    activeApiRequest = false;
-                    
                     // Still try to process the scan
-                    if (scanData) {
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation, even on partial failure
-                            unlockScanner();
-                        });
-                    } else {
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after operation, even on partial failure
                         unlockScanner();
-                    }
+                    });
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -798,8 +703,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const checkInData = data.data;
                 
                 // Then get attendee details from second API
-                // NEW: Keep activeApiRequest true during the second API call
-                return fetchAttendeeDetails(code)
+                fetchAttendeeDetails(code)
                     .then(attendeeDetails => {
                         // Combine data from both APIs
                         const combinedData = {
@@ -812,9 +716,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Display the combined data
                         updateScanResultWithAttendeeData(combinedData);
-                        
-                        // NEW: Mark API request as completed
-                        activeApiRequest = false;
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
                         // Only if scanData is not null (null means ineligible for goodie bag)
@@ -840,18 +741,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                         });
                         
-                        // NEW: Mark API request as completed
-                        activeApiRequest = false;
-                        
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after operation
-                                unlockScanner();
-                            });
-                        } else {
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation
                             unlockScanner();
-                        }
+                        });
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
@@ -872,17 +766,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.textContent = "Error connecting to database";
                 contestStatusValue.className = "error-text";
                 
-                // NEW: Mark API request as completed
-                activeApiRequest = false;
-                
                 // Make sure to unlock scanner even on connection error
-                if (scanData) {
-                    sendToGoogleSheets(scanData, () => {
-                        unlockScanner();
-                    });
-                } else {
+                sendToGoogleSheets(scanData, () => {
                     unlockScanner();
-                }
+                });
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
@@ -982,17 +869,9 @@ document.addEventListener('DOMContentLoaded', function() {
         goodiebagStatus.classList.add('hidden');
         contestStatus.classList.add('hidden');
         
-        // NEW: Set activeApiRequest to true to indicate ongoing API call
-        activeApiRequest = true;
-        
         // First get check-in/goodie bag/contest status from first API
         fetch(`${scriptUrl}?code=${encodeURIComponent(code)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 if (!data.success) {
                     // Reset scan result fields if there was an error
@@ -1011,18 +890,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.textContent = "Error: " + (data.message || "Attendee not found");
                     contestStatusValue.className = "error-text";
                     
-                    // NEW: Mark API request as completed
-                    activeApiRequest = false;
-                    
                     // Still try to process the scan
-                    if (scanData) {
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation, even on partial failure
-                            unlockScanner();
-                        });
-                    } else {
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after operation, even on partial failure
                         unlockScanner();
-                    }
+                    });
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -1044,9 +916,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Display the combined data
                         updateScanResultWithAttendeeData(combinedData);
-                        
-                        // NEW: Mark API request as completed
-                        activeApiRequest = false;
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
                         // Only if scanData is not null (null means ineligible for goodie bag)
@@ -1072,18 +941,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             timestamp: "Unknown" // Use "Unknown" instead of current timestamp
                         });
                         
-                        // NEW: Mark API request as completed
-                        activeApiRequest = false;
-                        
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after operation
-                                unlockScanner();
-                            });
-                        } else {
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation
                             unlockScanner();
-                        }
+                        });
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
@@ -1104,17 +966,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.textContent = "Error connecting to database";
                 contestStatusValue.className = "error-text";
                 
-                // NEW: Mark API request as completed
-                activeApiRequest = false;
-                
                 // Make sure to unlock scanner even on connection error
-                if (scanData) {
-                    sendToGoogleSheets(scanData, () => {
-                        unlockScanner();
-                    });
-                } else {
+                sendToGoogleSheets(scanData, () => {
                     unlockScanner();
-                }
+                });
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
