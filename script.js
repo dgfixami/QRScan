@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // New function to lock scanner - updated to disable mode buttons and pause scanning
+    // New function to lock scanner - updated to disable mode buttons
     function lockScanner() {
         isScanning = true;
         logToPage('Scanner locked - processing current scan', 'info');
@@ -206,32 +206,9 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
             btn.classList.add('disabled');
         });
-        
-        // Pause scanning to prevent additional scans during processing
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.pause();
-            logToPage('QR scanning paused during processing', 'info');
-        }
     }
     
-    // New function to resume scanning
-    function resumeScan() {
-        if (html5QrCode && html5QrCode.isPaused()) {
-            html5QrCode.resume().then(() => {
-                logToPage('QR scanning resumed', 'info');
-            }).catch(error => {
-                logToPage(`Error resuming scanner: ${error.message}`, 'error');
-                // If resume fails, try to restart the scanner
-                if (cameras.length > 0) {
-                    startScanner(cameras[currentCameraIndex].id);
-                } else {
-                    startFallbackScanner();
-                }
-            });
-        }
-    }
-    
-    // New function to unlock scanner - updated to re-enable mode buttons and resume scanning
+    // New function to unlock scanner - updated to re-enable mode buttons
     function unlockScanner() {
         isScanning = false;
         logToPage('Scanner unlocked - ready for next scan', 'info');
@@ -241,12 +218,9 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = false;
             btn.classList.remove('disabled');
         });
-        
-        // Resume scanning
-        resumeScan();
     }
     
-    // Add a fallback protection to ensure buttons are always re-enabled and scanning resumes
+    // Add a fallback protection to ensure buttons are always re-enabled
     function ensureUIUnlocked() {
         // Check if the scanner is locked
         if (isScanning) {
@@ -267,9 +241,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (anyLocked) {
             logToPage('Buttons re-enabled by safety check', 'info');
         }
-        
-        // Make sure scanning is resumed
-        resumeScan();
     }
     
     // Add a function to check if a code is eligible for a goodie bag
@@ -1091,13 +1062,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const config = {
                 fps: 10,
                 qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0,
-                // Hide QR scan squares and success indication
-                disableSuccessBuzzer: true,
-                rememberLastUsedCamera: true,
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                }
+                aspectRatio: 1.0
             };
             
             html5QrCode.start(
@@ -1156,12 +1121,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 {
                     fps: 10,
                     qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0,
-                    // Hide QR scan squares and success indication
-                    disableSuccessBuzzer: true,
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true
-                    }
+                    aspectRatio: 1.0
                 },
                 qrCodeSuccessCallback,
                 qrCodeErrorCallback
