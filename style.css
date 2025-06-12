@@ -586,32 +586,52 @@ img[alt="Info icon"] {
     border-right: 1px solid #ddd;
 }
 
-/* New styles for QR scanner states */
-.qr-scanning-active #reader {
-    border-color: #333;
-}
-
-.qr-scanning-locked #reader {
-    border-color: #FFC107; /* Amber color for loading state */
-}
-
-/* Override HTML5QRCode's default success indicators during loading */
-.qr-scanning-locked #reader canvas + div {
-    border-color: #FFC107 !important;
-}
-
-.qr-scanning-locked #reader .code-border-highlight {
-    border-color: #FFC107 !important;
-}
-
-/* Target the corner elements in HTML5QRCode */
-.qr-scanning-locked #reader div[style*="border-top"][style*="border-left"],
-.qr-scanning-locked #reader div[style*="border-top"][style*="border-right"],
-.qr-scanning-locked #reader div[style*="border-bottom"][style*="border-left"],
-.qr-scanning-locked #reader div[style*="border-bottom"][style*="border-right"] {
-    border-color: #FFC107 !important;
-}
-
 .mode-button:last-child {
     border-right: none;
+}
+
+.mode-button.active {
+    background-color: #2196F3;
+    color: white;
+}
+
+.mode-button[data-mode="Goodie Bag"].active {
+    background-color: #4CAF50;
+}
+
+.mode-button[data-mode="Contest"].active {
+    background-color: #FF9800;
+}
+
+.mode-button:hover:not(.active) {
+    background-color: #e0e0e0;
+}
+
+.mode-button.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/* Contest status styles */
+#contest-status.current-mode {
+    background-color: #fff3e0; /* Orange light background */
+    border-left: 3px solid #FF9800; /* Orange border */
+}
+
+.attendee-info p:nth-child(6) {
+    padding: 5px 10px;
+    border-radius: 4px;
+    background-color: #f5f5f5;
+    border-left: 3px solid #FF9800; /* Contest orange color */
+    margin-top: 5px;
+}
+
+/* Action button for contest */
+.contest-button {
+    background-color: #FF9800;
+}
+
+.contest-button:hover {
+    background-color: #F57C00;
 }
