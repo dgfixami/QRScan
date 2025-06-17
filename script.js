@@ -201,9 +201,6 @@ document.addEventListener('DOMContentLoaded', function() {
         isScanning = true;
         logToPage('Scanner locked - processing current scan', 'info');
         
-        // Show the loading overlay
-        showLoadingOverlay();
-        
         // Disable mode buttons during scanning
         modeButtons.forEach(btn => {
             btn.disabled = true;
@@ -216,9 +213,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set scanning state to false
         isScanning = false;
         logToPage('Scanner unlocked - ready for next scan', 'info');
-        
-        // Hide the loading overlay
-        hideLoadingOverlay();
         
         // Check if any buttons are in disabled state and unlock them
         let anyLocked = false;
@@ -524,9 +518,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
         
-        // Update loading overlay
-        showLoadingOverlay(`Sending ${scanData.mode} data for code: ${scanData.code}`);
-        
         fetch(scriptUrl, {
             method: 'POST',
             headers: {
@@ -592,21 +583,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         logMessages.prepend(logEntry);
         console.log(`[${type.toUpperCase()}] ${message}`);
-        
-        // If scanner is locked (processing a scan), update the loading overlay with latest message
-        if (isScanning) {
-            const overlay = document.querySelector('.camera-loading-overlay');
-            if (overlay && overlay.classList.contains('active')) {
-                const logArea = overlay.querySelector('.camera-loading-log');
-                const latestLogs = Array.from(logMessages.querySelectorAll('.log-entry'))
-                    .slice(0, 3)
-                    .map(entry => entry.textContent.split(': ').slice(1).join(': '));
-                logArea.innerHTML = latestLogs.join('<br>');
-            }
-        }
     }
     
-    // Success callback when QR code is scanned - updated to show overlay with status
+    // Success callback when QR code is scanned - updated to allow all codes for Contest mode
     function qrCodeSuccessCallback(decodedText) {
         // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
@@ -616,9 +595,6 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Lock the scanner immediately
             lockScanner();
-            
-            // Show loading overlay with scan code
-            showLoadingOverlay(`Processing code: ${decodedText}`);
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
@@ -670,9 +646,6 @@ document.addEventListener('DOMContentLoaded', function() {
         scanName.textContent = "Loading...";
         scanCompany.textContent = "Loading...";
         scanTimestamp.textContent = "Loading...";
-        
-        // Update loading overlay with status
-        showLoadingOverlay(`Looking up details for code: ${code}`);
         
         // Reset and hide all status elements during loading
         checkinStatus.classList.add('hidden');
@@ -874,9 +847,6 @@ document.addEventListener('DOMContentLoaded', function() {
         scanCompany.textContent = "Loading...";
         scanTimestamp.textContent = "Loading...";
         
-        // Update loading overlay with status
-        showLoadingOverlay(`Looking up details for code: ${code}`);
-        
         // Reset and hide all status elements during loading
         checkinStatus.classList.add('hidden');
         goodiebagStatus.classList.add('hidden');
@@ -988,12 +958,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Initialize camera and add loading overlay to the reader element
-    function initializeCameras() {
+    // Initialize camera and other components
+    setTimeout(() => {
+        initializeCameras();
+    }, 500);
+    
+    async function initializeCameras() {
         try {
-            // Create and add loading overlay to the reader element
-            createLoadingOverlay();
-            
             logToPage('Getting available cameras...');
             
             Html5Qrcode.getCameras().then(devices => {
@@ -1034,74 +1005,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             logToPage(`Camera initialization error: ${error.message}`, 'error');
             startFallbackScanner();
-        }
-    }
-    
-    // Create a loading overlay for the camera
-    function createLoadingOverlay() {
-        // Check if overlay already exists
-        if (document.querySelector('.camera-loading-overlay')) {
-            return;
-        }
-        
-        // Create overlay container
-        const overlay = document.createElement('div');
-        overlay.className = 'camera-loading-overlay';
-        
-        // Create spinner
-        const spinner = document.createElement('div');
-        spinner.className = 'camera-spinner';
-        
-        // Create status text
-        const statusText = document.createElement('div');
-        statusText.className = 'camera-status-text';
-        statusText.textContent = 'Processing scan...';
-        
-        // Create log message area
-        const logArea = document.createElement('div');
-        logArea.className = 'camera-loading-log';
-        
-        // Add elements to overlay
-        overlay.appendChild(spinner);
-        overlay.appendChild(statusText);
-        overlay.appendChild(logArea);
-        
-        // Add overlay to reader
-        reader.appendChild(overlay);
-    }
-    
-    // Show loading overlay with latest log message
-    function showLoadingOverlay(message = null) {
-        const overlay = document.querySelector('.camera-loading-overlay');
-        if (!overlay) return;
-        
-        const logArea = overlay.querySelector('.camera-loading-log');
-        const statusText = overlay.querySelector('.camera-status-text');
-        
-        // Update status text if provided
-        if (message) {
-            statusText.textContent = message;
-        } else {
-            statusText.textContent = 'Processing scan...';
-        }
-        
-        // Get latest log message
-        const latestLogs = Array.from(logMessages.querySelectorAll('.log-entry'))
-            .slice(0, 3) // Get 3 most recent logs
-            .map(entry => entry.textContent.split(': ').slice(1).join(': ')); // Remove timestamp
-        
-        // Update log area with latest messages
-        logArea.innerHTML = latestLogs.join('<br>');
-        
-        // Show overlay
-        overlay.classList.add('active');
-    }
-    
-    // Hide loading overlay
-    function hideLoadingOverlay() {
-        const overlay = document.querySelector('.camera-loading-overlay');
-        if (overlay) {
-            overlay.classList.remove('active');
         }
     }
     
