@@ -19,7 +19,15 @@
         </div>
         
         <div class="scanner-container">
-            <div id="reader"></div>
+            <div id="reader">
+                <div class="camera-loading-overlay" id="camera-loading-overlay">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-message">Processing scan...</div>
+                    <div class="loading-logs" id="loading-logs">
+                        <!-- Recent log entries will appear here -->
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div class="result-container">
