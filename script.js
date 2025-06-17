@@ -522,11 +522,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // After successful action, refresh the lookup data
             fetchAttendeeData(code);
             
-            // No need to unlock the scanner here as fetchAttendeeData will handle it
+            // Unlock the scanner
+            unlockScanner();
         });
     }
     
-    // Modified function to send data to Google Sheets with callback - ensure proper unlocking
+    // Modified function to send data to Google Sheets with callback
     function sendToGoogleSheets(scanData, callback) {
         // Show sending status
         logToPage('Sending data to Google Sheets...', 'info');
@@ -546,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Remove success alerts but keep in logs
             // No more alerts for successful operations
             
-            // Always execute callback if provided
+            // Execute callback if provided
             if (typeof callback === 'function') {
                 callback();
             } else {
@@ -568,7 +569,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Success callback when QR code is scanned - updated to properly unlock after data loading
+    // Show lookup error
+    function showLookupError(message) {
+        lookupResult.innerHTML = `
+            <div class="lookup-error">
+                <p>⚠️ ${message}</p>
+            </div>
+        `;
+        lookupResult.classList.remove('hidden');
+    }
+    
+    // Function to log messages to the page
+    function logToPage(message, type = 'info') {
+        if (message === undefined) {
+            message = "Unknown error occurred (undefined message)";
+            type = 'warning';
+        } else if (message === '') {
+            message = "Empty message received";
+            type = 'warning';
+        }
+        
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry ${type}`;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        logEntry.textContent = `${timestamp}: ${message}`;
+        
+        logMessages.prepend(logEntry);
+        console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+    
+    // Success callback when QR code is scanned - updated to allow all codes for Contest mode
     function qrCodeSuccessCallback(decodedText) {
         // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
@@ -578,6 +609,9 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Lock the scanner immediately
             lockScanner();
+            
+            // Add safety timeout to ensure unlock happens no matter what
+            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
@@ -624,7 +658,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Updated function to fetch and display attendee data for the scan result section
-    // Make sure it properly unlocks scanner in all cases
     function fetchAttendeeDataForScan(code, scanData) {
         // Show loading state
         scanName.textContent = "Loading...";
@@ -658,15 +691,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    if (scanData) {
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation, even on partial failure
-                            unlockScanner();
-                        });
-                    } else {
-                        // Ensure scanner unlocks if no scanData to process
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after operation, even on partial failure
                         unlockScanner();
-                    }
+                    });
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -714,15 +742,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after operation
-                                unlockScanner();
-                            });
-                        } else {
-                            // Ensure scanner unlocks even if no data to send
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation
                             unlockScanner();
-                        }
+                        });
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
@@ -744,13 +767,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.className = "error-text";
                 
                 // Make sure to unlock scanner even on connection error
-                if (scanData) {
-                    sendToGoogleSheets(scanData, () => {
-                        unlockScanner();
-                    });
-                } else {
+                sendToGoogleSheets(scanData, () => {
                     unlockScanner();
-                }
+                });
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
@@ -872,15 +891,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    if (scanData) {
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation, even on partial failure
-                            unlockScanner();
-                        });
-                    } else {
-                        // Ensure scanner unlocks if no scanData to process
+                    sendToGoogleSheets(scanData, () => {
+                        // Unlock scanner after operation, even on partial failure
                         unlockScanner();
-                    }
+                    });
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -928,15 +942,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        if (scanData) {
-                            sendToGoogleSheets(scanData, () => {
-                                // Unlock scanner after operation
-                                unlockScanner();
-                            });
-                        } else {
-                            // Ensure scanner unlocks even if no data to send
+                        sendToGoogleSheets(scanData, () => {
+                            // Unlock scanner after operation
                             unlockScanner();
-                        }
+                        });
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
@@ -958,13 +967,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.className = "error-text";
                 
                 // Make sure to unlock scanner even on connection error
-                if (scanData) {
-                    sendToGoogleSheets(scanData, () => {
-                        unlockScanner();
-                    });
-                } else {
+                sendToGoogleSheets(scanData, () => {
                     unlockScanner();
-                }
+                });
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
