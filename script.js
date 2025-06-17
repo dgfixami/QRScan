@@ -196,13 +196,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // New function to lock scanner - updated to show loading overlay
+    // New function to lock scanner - updated to disable mode buttons
     function lockScanner() {
         isScanning = true;
         logToPage('Scanner locked - processing current scan', 'info');
-        
-        // Show loading overlay on camera
-        showCameraLoading();
         
         // Disable mode buttons during scanning
         modeButtons.forEach(btn => {
@@ -211,14 +208,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Enhanced unlockScanner function - updated to hide loading overlay
+    // Enhanced unlockScanner function that incorporates ensureUIUnlocked functionality
     function unlockScanner() {
         // Set scanning state to false
         isScanning = false;
         logToPage('Scanner unlocked - ready for next scan', 'info');
-        
-        // Hide loading overlay
-        hideCameraLoading();
         
         // Check if any buttons are in disabled state and unlock them
         let anyLocked = false;
@@ -232,81 +226,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (anyLocked) {
             logToPage('Buttons re-enabled by safety check', 'info');
-        }
-    }
-    
-    // Get loading overlay elements
-    const cameraLoadingOverlay = document.getElementById('camera-loading-overlay');
-    const loadingLogs = document.getElementById('loading-logs');
-    
-    // Function to show loading overlay on camera
-    function showCameraLoading() {
-        if (cameraLoadingOverlay) {
-            cameraLoadingOverlay.classList.add('show');
-            // Update loading logs with recent activity
-            updateLoadingLogs();
-        }
-    }
-    
-    // Function to hide loading overlay on camera
-    function hideCameraLoading() {
-        if (cameraLoadingOverlay) {
-            cameraLoadingOverlay.classList.remove('show');
-        }
-    }
-    
-    // Function to update loading logs with recent log entries
-    function updateLoadingLogs() {
-        if (!loadingLogs) return;
-        
-        // Get the last 5 log entries from the main log
-        const logEntries = document.querySelectorAll('.log-entry');
-        const recentEntries = Array.from(logEntries).slice(0, 5);
-        
-        // Clear current loading logs
-        loadingLogs.innerHTML = '';
-        
-        // Add recent entries to loading logs
-        recentEntries.forEach(entry => {
-            const loadingEntry = document.createElement('div');
-            loadingEntry.className = 'loading-log-entry';
-            
-            // Copy the log level class
-            if (entry.classList.contains('error')) loadingEntry.classList.add('error');
-            if (entry.classList.contains('success')) loadingEntry.classList.add('success');
-            if (entry.classList.contains('info')) loadingEntry.classList.add('info');
-            if (entry.classList.contains('warning')) loadingEntry.classList.add('warning');
-            
-            loadingEntry.textContent = entry.textContent;
-            loadingLogs.appendChild(loadingEntry);
-        });
-        
-        // Scroll to top of loading logs
-        loadingLogs.scrollTop = 0;
-    }
-    
-    // Enhanced log function to also update loading overlay
-    function logToPage(message, type = 'info') {
-        if (message === undefined) {
-            message = "Unknown error occurred (undefined message)";
-            type = 'warning';
-        } else if (message === '') {
-            message = "Empty message received";
-            type = 'warning';
-        }
-        
-        const logEntry = document.createElement('div');
-        logEntry.className = `log-entry ${type}`;
-        
-        const timestamp = new Date().toLocaleTimeString();
-        logEntry.textContent = `${timestamp}: ${message}`;
-        
-        logMessages.prepend(logEntry);
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        
-        // Update loading overlay if it's visible
-        if (cameraLoadingOverlay && cameraLoadingOverlay.classList.contains('show')) {
-            updateLoadingLogs();
         }
     }
     
@@ -664,14 +583,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         logMessages.prepend(logEntry);
         console.log(`[${type.toUpperCase()}] ${message}`);
-        
-        // Update loading overlay if it's visible
-        if (cameraLoadingOverlay && cameraLoadingOverlay.classList.contains('show')) {
-            updateLoadingLogs();
-        }
     }
     
-    // Success callback when QR code is scanned - enhanced with loading overlay
+    // Success callback when QR code is scanned - updated to allow all codes for Contest mode
     function qrCodeSuccessCallback(decodedText) {
         // If scanner is locked, silently ignore this scan (no logging)
         if (isScanning) {
@@ -679,7 +593,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            // Lock the scanner immediately and show loading overlay
+            // Lock the scanner immediately
             lockScanner();
             
             const flash = document.querySelector('.camera-flash');

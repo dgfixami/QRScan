@@ -183,86 +183,14 @@ img[alt="Info icon"] {
     z-index: 10;
 }
 
-/* Loading overlay for camera */
-.camera-loading-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 20;
-    border-radius: 8px;
-    padding: 20px;
-    box-sizing: border-box;
+.flash-animation {
+    animation: flash 0.5s;
 }
 
-.camera-loading-overlay.show {
-    display: flex;
-}
-
-.loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-top: 4px solid #fff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 15px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.loading-message {
-    font-size: 16px;
-    font-weight: bold;
-    margin-bottom: 15px;
-    text-align: center;
-}
-
-.loading-logs {
-    max-height: 120px;
-    overflow-y: auto;
-    width: 100%;
-    font-family: monospace;
-    font-size: 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    padding: 10px;
-}
-
-.loading-log-entry {
-    margin-bottom: 5px;
-    padding: 3px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.loading-log-entry:last-child {
-    border-bottom: none;
-}
-
-.loading-log-entry.error {
-    color: #ffcdd2;
-}
-
-.loading-log-entry.success {
-    color: #c8e6c9;
-}
-
-.loading-log-entry.info {
-    color: #bbdefb;
-}
-
-.loading-log-entry.warning {
-    color: #ffe0b2;
+@keyframes flash {
+    0% { opacity: 0; }
+    50% { opacity: 0.9; }
+    100% { opacity: 0; }
 }
 
 .result-container {
