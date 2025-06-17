@@ -110,6 +110,7 @@ input:checked + .slider:before {
 .scanner-container {
     margin-bottom: 20px;
     text-align: center;
+    position: relative;
 }
 
 #reader {
@@ -611,6 +612,26 @@ img[alt="Info icon"] {
     opacity: 0.5;
     pointer-events: none;
     cursor: not-allowed;
+    background-color: #cccccc;
+    color: #888888;
+    position: relative;
+}
+
+/* Add disabled indicator */
+.mode-button.disabled::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.05),
+        rgba(0, 0, 0, 0.05) 10px,
+        rgba(0, 0, 0, 0.1) 10px,
+        rgba(0, 0, 0, 0.1) 20px
+    );
 }
 
 /* Contest status styles */
@@ -634,4 +655,53 @@ img[alt="Info icon"] {
 
 .contest-button:hover {
     background-color: #F57C00;
+}
+
+/* New styles for processing indicator during scanning */
+#processing-indicator {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    z-index: 100;
+    animation: pulse 1.5s infinite;
+}
+
+#processing-indicator .spinner {
+    width: 16px;
+    height: 16px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+#processing-indicator span {
+    font-weight: bold;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.8;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.8;
+    }
 }
