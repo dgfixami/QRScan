@@ -208,27 +208,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // New function to unlock scanner - updated to re-enable mode buttons
+    // Enhanced unlockScanner function that incorporates ensureUIUnlocked functionality
     function unlockScanner() {
+        // Set scanning state to false
         isScanning = false;
         logToPage('Scanner unlocked - ready for next scan', 'info');
         
-        // Re-enable mode buttons after scanning completes
-        modeButtons.forEach(btn => {
-            btn.disabled = false;
-            btn.classList.remove('disabled');
-        });
-    }
-    
-    // Add a fallback protection to ensure buttons are always re-enabled
-    function ensureUIUnlocked() {
-        // Check if the scanner is locked
-        if (isScanning) {
-            isScanning = false;
-            logToPage('Scanner unlocked by safety check', 'warning');
-        }
-        
-        // Check if any buttons are in disabled state and unlock them if needed
+        // Check if any buttons are in disabled state and unlock them
         let anyLocked = false;
         modeButtons.forEach(btn => {
             if (btn.disabled) {
@@ -609,9 +595,6 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Lock the scanner immediately
             lockScanner();
-            
-            // Add safety timeout to ensure unlock happens no matter what
-            setTimeout(ensureUIUnlocked, 15000); // 15 seconds safety timeout
             
             const flash = document.querySelector('.camera-flash');
             if (flash) {
