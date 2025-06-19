@@ -793,7 +793,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 checkinStatusValue.textContent = "Not checked in yet";
                 checkinStatusValue.className = "success-text";
             }
-        }
+        } 
         
         // Update goodie bag status - show eligibility for all modes, not just Goodie Bag mode
         if (!isGoodieBagEligible(data.code) && currentMode === 'Goodie Bag') {
