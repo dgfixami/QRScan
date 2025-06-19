@@ -251,12 +251,58 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide previous results while loading
         lookupResult.classList.add('hidden');
         
-        // Show loading indicator
-        lookupResult.innerHTML = '<div class="loading">Loading...</div>';
+        // Show loading animation instead of simple text
+        const loadingElement = createLoadingElement('dots', 'Searching database...');
+        lookupResult.innerHTML = '';
+        lookupResult.appendChild(loadingElement);
         lookupResult.classList.remove('hidden');
         
         // Fetch data from Google Sheets
         fetchAttendeeData(code);
+    }
+    
+    // New function to create loading animation
+    function createLoadingElement(type = 'spinner', text = 'Loading...', compact = false) {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = compact ? 'loading compact' : 'loading';
+        
+        if (type === 'spinner') {
+            loadingDiv.innerHTML = `
+                <div class="loading-spinner"></div>
+                <div class="loading-text">${text}</div>
+            `;
+        } else if (type === 'dots') {
+            loadingDiv.innerHTML = `
+                <div class="loading-dots">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+                <div class="loading-text">${text}</div>
+            `;
+        }
+        
+        return loadingDiv;
+    }
+
+    // New function to show loading state for scan results
+    function showScanResultLoading() {
+        // Add pulse animation to the fields being loaded
+        scanName.textContent = "Loading...";
+        scanName.classList.add('loading-pulse');
+        
+        scanCompany.textContent = "Loading...";
+        scanCompany.classList.add('loading-pulse');
+        
+        scanTimestamp.textContent = "Loading...";
+        scanTimestamp.classList.add('loading-pulse');
+    }
+
+    // New function to hide loading state for scan results
+    function hideScanResultLoading() {
+        scanName.classList.remove('loading-pulse');
+        scanCompany.classList.remove('loading-pulse');
+        scanTimestamp.classList.remove('loading-pulse');
     }
     
     // New function to fetch attendee details from the second API
@@ -304,8 +350,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to fetch attendee data from Google Sheets for manual lookup only
     function fetchAttendeeData(code) {
-        // Show that we're loading
-        lookupResult.innerHTML = '<div class="loading">Loading...</div>';
+        // Show loading animation
+        const loadingElement = createLoadingElement('spinner', 'Retrieving attendee data...');
+        lookupResult.innerHTML = '';
+        lookupResult.appendChild(loadingElement);
         lookupResult.classList.remove('hidden');
         
         // First get check-in/goodie bag status from first API
@@ -319,6 +367,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 const checkInData = data.data;
+                
+                // Update loading message
+                const updatingLoadingElement = createLoadingElement('dots', 'Getting attendee details...');
+                lookupResult.innerHTML = '';
+                lookupResult.appendChild(updatingLoadingElement);
                 
                 // Then get attendee details from second API
                 return fetchAttendeeDetails(code)
@@ -515,7 +568,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Modified function to send data to Google Sheets with callback
     function sendToGoogleSheets(scanData, callback) {
-        // Show sending status
+        // Show sending status with compact loading animation
+        const loadingElement = createLoadingElement('spinner', 'Updating database...', true);
         logToPage('Sending data to Google Sheets...', 'info');
         
         fetch(scriptUrl, {
@@ -642,10 +696,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Updated function to fetch and display attendee data for the scan result section
     function fetchAttendeeDataForScan(code, scanData) {
-        // Show loading state
-        scanName.textContent = "Loading...";
-        scanCompany.textContent = "Loading...";
-        scanTimestamp.textContent = "Loading...";
+        // Show loading state with animation
+        showScanResultLoading();
         
         // Reset and hide all status elements during loading
         checkinStatus.classList.add('hidden');
@@ -657,7 +709,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (!data.success) {
-                    // Reset scan result fields if there was an error
+                    // Hide loading animation and reset scan result fields
+                    hideScanResultLoading();
                     resetScanResultFields();
                     
                     // Show error for all statuses
@@ -674,10 +727,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after operation, even on partial failure
+                    if (scanData) {
+                        sendToGoogleSheets(scanData, () => {
+                            unlockScanner();
+                        });
+                    } else {
                         unlockScanner();
-                    });
+                    }
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -688,13 +744,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Then get attendee details from second API
                 fetchAttendeeDetails(code)
                     .then(attendeeDetails => {
+                        // Hide loading animation
+                        hideScanResultLoading();
+                        
                         // Combine data from both APIs
                         const combinedData = {
                             ...checkInData,
                             name: attendeeDetails.name,
                             email: attendeeDetails.email,
-                            timestamp: attendeeDetails.timestamp, // Use timestamp from attendeeDetails
-                            code: code // Add code to combined data for eligibility check
+                            timestamp: attendeeDetails.timestamp // Use timestamp from attendeeDetails
                         };
                         
                         // Display the combined data
@@ -716,6 +774,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         logToPage(`Retrieved attendee info for: ${code}`, 'success');
                     })
                     .catch(error => {
+                        // Hide loading animation
+                        hideScanResultLoading();
+                        
                         // If we can't get attendee details, still show check-in data with unknown name/email
                         updateScanResultWithAttendeeData({
                             ...checkInData,
@@ -725,15 +786,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation
+                        if (scanData) {
+                            sendToGoogleSheets(scanData, () => {
+                                unlockScanner();
+                            });
+                        } else {
                             unlockScanner();
-                        });
+                        }
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
             })
             .catch(error => {
+                // Hide loading animation
+                hideScanResultLoading();
                 resetScanResultFields();
                 
                 // Show connection error for all statuses
@@ -750,9 +816,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.className = "error-text";
                 
                 // Make sure to unlock scanner even on connection error
-                sendToGoogleSheets(scanData, () => {
+                if (scanData) {
+                    sendToGoogleSheets(scanData, () => {
+                        unlockScanner();
+                    });
+                } else {
                     unlockScanner();
-                });
+                }
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
@@ -875,10 +945,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Updated fetchAttendeeDataForScan to handle Contest data
     function fetchAttendeeDataForScan(code, scanData) {
-        // Show loading state
-        scanName.textContent = "Loading...";
-        scanCompany.textContent = "Loading...";
-        scanTimestamp.textContent = "Loading...";
+        // Show loading state with animation
+        showScanResultLoading();
         
         // Reset and hide all status elements during loading
         checkinStatus.classList.add('hidden');
@@ -890,7 +958,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (!data.success) {
-                    // Reset scan result fields if there was an error
+                    // Hide loading animation and reset scan result fields
+                    hideScanResultLoading();
                     resetScanResultFields();
                     
                     // Show error for all statuses
@@ -907,10 +976,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     contestStatusValue.className = "error-text";
                     
                     // Still try to process the scan
-                    sendToGoogleSheets(scanData, () => {
-                        // Unlock scanner after operation, even on partial failure
+                    if (scanData) {
+                        sendToGoogleSheets(scanData, () => {
+                            unlockScanner();
+                        });
+                    } else {
                         unlockScanner();
-                    });
+                    }
                     
                     logToPage(`Lookup failed for scan: ${data.message}`, 'error');
                     return;
@@ -921,6 +993,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Then get attendee details from second API
                 fetchAttendeeDetails(code)
                     .then(attendeeDetails => {
+                        // Hide loading animation
+                        hideScanResultLoading();
+                        
                         // Combine data from both APIs
                         const combinedData = {
                             ...checkInData,
@@ -949,6 +1024,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         logToPage(`Retrieved attendee info for: ${code}`, 'success');
                     })
                     .catch(error => {
+                        // Hide loading animation
+                        hideScanResultLoading();
+                        
                         // If we can't get attendee details, still show check-in data with unknown name/email
                         updateScanResultWithAttendeeData({
                             ...checkInData,
@@ -958,15 +1036,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Now perform the actual scan operation (check-in or goodie bag)
-                        sendToGoogleSheets(scanData, () => {
-                            // Unlock scanner after operation
+                        if (scanData) {
+                            sendToGoogleSheets(scanData, () => {
+                                unlockScanner();
+                            });
+                        } else {
                             unlockScanner();
-                        });
+                        }
                         
                         logToPage(`Retrieved partial data. Attendee details error: ${error.message}`, 'warning');
                     });
             })
             .catch(error => {
+                // Hide loading animation
+                hideScanResultLoading();
                 resetScanResultFields();
                 
                 // Show connection error for all statuses
@@ -983,9 +1066,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 contestStatusValue.className = "error-text";
                 
                 // Make sure to unlock scanner even on connection error
-                sendToGoogleSheets(scanData, () => {
+                if (scanData) {
+                    sendToGoogleSheets(scanData, () => {
+                        unlockScanner();
+                    });
+                } else {
                     unlockScanner();
-                });
+                }
                 
                 logToPage(`Error fetching attendee data: ${error.message}`, 'error');
             });
