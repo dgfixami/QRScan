@@ -795,9 +795,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Update goodie bag status - add eligibility warning and first time message
-        if (!isGoodieBagEligible(data.code) && currentMode === 'Goodie Bag') {
-            goodiebagStatusValue.textContent = "⚠️ Not eligible for goodiebag (missing GB code)";
+        // Update goodie bag status - show eligibility for all modes, not just Goodie Bag mode
+        if (!isGoodieBagEligible(data.code)) {
+            goodiebagStatusValue.textContent = "⚠️ Not allowed to receive goodie bag";
             goodiebagStatusValue.className = "error-text";
         } else if (data.hasGoodieBag) {
             goodiebagStatusValue.textContent = `⚠️ Already received at ${formatDateTime(data.goodieBagTime)}`;
