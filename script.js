@@ -796,8 +796,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Update goodie bag status - show eligibility for all modes, not just Goodie Bag mode
-        if (!isGoodieBagEligible(data.code)) {
-            goodiebagStatusValue.textContent = "⚠️ Not allowed to receive goodie bag";
+        if (!isGoodieBagEligible(data.code) && currentMode === 'Goodie Bag') {
+            goodiebagStatusValue.textContent = "⚠️ Not allowed to receive goodie bag (missing GB code) ⚠️";
+            goodiebagStatusValue.className = "error-text";
+        }
+        else if (!isGoodieBagEligible(data.code)) {
+            goodiebagStatusValue.textContent = "Not allowed to receive goodie bag";
             goodiebagStatusValue.className = "error-text";
         } else if (data.hasGoodieBag) {
             goodiebagStatusValue.textContent = `⚠️ Already received at ${formatDateTime(data.goodieBagTime)}`;
