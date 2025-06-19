@@ -776,6 +776,11 @@ document.addEventListener('DOMContentLoaded', function() {
         goodiebagStatus.classList.remove('hidden');
         contestStatus.classList.remove('hidden');
         
+        // Remove all previous styling classes
+        checkinStatus.classList.remove('current-mode', 'first-time', 'already-done');
+        goodiebagStatus.classList.remove('current-mode', 'first-time', 'already-done');
+        contestStatus.classList.remove('current-mode', 'first-time', 'already-done');
+        
         // Update check-in status - show first time message for current mode
         if (data.isCheckedIn) {
             checkinStatusValue.textContent = `⚠️ Already checked in at ${formatDateTime(data.checkInTime)}`;
@@ -821,17 +826,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Highlight the current mode status
-        checkinStatus.classList.remove('current-mode');
-        goodiebagStatus.classList.remove('current-mode');
-        contestStatus.classList.remove('current-mode');
-        
+        // Highlight the current mode status with appropriate background
         if (currentMode === 'Check-in') {
             checkinStatus.classList.add('current-mode');
+            if (data.isCheckedIn) {
+                checkinStatus.classList.add('already-done');
+            } else {
+                checkinStatus.classList.add('first-time');
+            }
         } else if (currentMode === 'Goodie Bag') {
             goodiebagStatus.classList.add('current-mode');
+            if (!isGoodieBagEligible(data.code)) {
+                // Don't add first-time or already-done for ineligible codes
+            } else if (data.hasGoodieBag) {
+                goodiebagStatus.classList.add('already-done');
+            } else {
+                goodiebagStatus.classList.add('first-time');
+            }
         } else if (currentMode === 'Contest') {
             contestStatus.classList.add('current-mode');
+            if (data.inContest) {
+                contestStatus.classList.add('already-done');
+            } else {
+                contestStatus.classList.add('first-time');
+            }
         }
     }
     
