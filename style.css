@@ -270,13 +270,13 @@ img[alt="Info icon"] {
 }
 
 #goodiebag-status.current-mode {
-    background-color: #e8f5e9; /* Light green background */
-    border-left: 3px solid #4CAF50; /* Green border */
+    background-color: #f3e5f5; /* Light purple background */
+    border-left: 3px solid #9C27B0; /* Purple border */
 }
 
 #contest-status.current-mode {
-    background-color: #fff3e0; /* Orange light background */
-    border-left: 3px solid #FF9800; /* Orange border */
+    background-color: #e0f2f1; /* Light teal background */
+    border-left: 3px solid #009688; /* Teal border */
 }
 
 /* Clean up some of the scanner UI */
@@ -522,7 +522,7 @@ img[alt="Info icon"] {
 }
 
 .attendee-info p:nth-child(5) {
-    border-left-color: #4CAF50;
+    border-left-color: #9C27B0; /* Purple for goodie bag */
     /* Goodie bag green color */
 }
 
@@ -558,11 +558,19 @@ img[alt="Info icon"] {
 }
 
 .goodiebag-button {
-    background-color: #4CAF50;
+    background-color: #9C27B0; /* Purple instead of green */
 }
 
 .goodiebag-button:hover {
-    background-color: #3e8e41;
+    background-color: #7B1FA2; /* Darker purple on hover */
+}
+
+.contest-button {
+    background-color: #009688; /* Teal instead of indigo */
+}
+
+.contest-button:hover {
+    background-color: #00796B; /* Darker teal on hover */
 }
 
 .loading {
@@ -611,11 +619,11 @@ img[alt="Info icon"] {
 }
 
 .mode-button[data-mode="Goodie Bag"].active {
-    background-color: #4CAF50;
+    background-color: #9C27B0; /* Purple instead of green */
 }
 
 .mode-button[data-mode="Contest"].active {
-    background-color: #FF9800;
+    background-color: #009688; /* Teal instead of indigo */
 }
 
 .mode-button:hover:not(.active) {
@@ -630,14 +638,14 @@ img[alt="Info icon"] {
 
 /* Contest status styles */
 #contest-status.current-mode {
-    background-color: #fff3e0; /* Orange light background */
-    border-left: 3px solid #FF9800; /* Orange border */
+    background-color: #e0f2f1; /* Light teal background */
+    border-left: 3px solid #009688; /* Teal border */
 }
 
 .attendee-info p:nth-child(6) {
     padding: 5px 10px;
     border-radius: 4px;
     background-color: #f5f5f5;
-    border-left: 3px solid #FF9800; /* Contest orange color */
+    border-left: 3px solid #009688; /* Teal for contest */
     margin-top: 5px;
 }
