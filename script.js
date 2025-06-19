@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add check-in status
         const checkinP = document.createElement('p');
         if (data.isCheckedIn) {
-            checkinP.innerHTML = `<strong>Check-in:</strong> <span class="warning-text">Already checked in at ${formatDateTime(data.checkInTime)}</span>`;
+            checkinP.innerHTML = `<strong>Check-in:</strong> <span class="warning-text">⚠️ Already checked in at ${formatDateTime(data.checkInTime)}</span>`;
         } else {
             checkinP.innerHTML = `<strong>Check-in:</strong> <span class="success-text">Not checked in yet</span>`;
         }
@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isGoodieBagEligible(data.code)) {
             goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="error-text">Not eligible (missing GB code)</span>`;
         } else if (data.hasGoodieBag) {
-            goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="warning-text">Already received at ${formatDateTime(data.goodieBagTime)}</span>`;
+            goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="warning-text">⚠️ Already received at ${formatDateTime(data.goodieBagTime)}</span>`;
         } else {
             goodieP.innerHTML = `<strong>Goodie Bag:</strong> <span class="success-text">Not received yet</span>`;
         }
@@ -405,7 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add contest status
         const contestP = document.createElement('p');
         if (data.inContest) {
-            contestP.innerHTML = `<strong>Contest:</strong> <span class="warning-text">Already entered at ${formatDateTime(data.contestTime)}</span>`;
+            contestP.innerHTML = `<strong>Contest:</strong> <span class="warning-text">⚠️ Already entered at ${formatDateTime(data.contestTime)}</span>`;
         } else {
             contestP.innerHTML = `<strong>Contest:</strong> <span class="success-text">Not entered yet</span>`;
         }
@@ -776,34 +776,49 @@ document.addEventListener('DOMContentLoaded', function() {
         goodiebagStatus.classList.remove('hidden');
         contestStatus.classList.remove('hidden');
         
-        // Update check-in status
+        // Update check-in status - show first time message for current mode
         if (data.isCheckedIn) {
-            checkinStatusValue.textContent = `Already checked in at ${formatDateTime(data.checkInTime)}`;
+            checkinStatusValue.textContent = `⚠️ Already checked in at ${formatDateTime(data.checkInTime)}`;
             checkinStatusValue.className = "warning-text";
         } else {
-            checkinStatusValue.textContent = "Not checked in yet";
-            checkinStatusValue.className = "success-text";
+            if (currentMode === 'Check-in') {
+                checkinStatusValue.textContent = "✅ First time check-in!";
+                checkinStatusValue.className = "success-text";
+            } else {
+                checkinStatusValue.textContent = "Not checked in yet";
+                checkinStatusValue.className = "success-text";
+            }
         }
         
-        // Update goodie bag status - add eligibility warning
+        // Update goodie bag status - add eligibility warning and first time message
         if (!isGoodieBagEligible(data.code) && currentMode === 'Goodie Bag') {
-            goodiebagStatusValue.textContent = "⚠️ Not eligible (missing GB code)";
+            goodiebagStatusValue.textContent = "⚠️ Not eligible for goodiebag (missing GB code)";
             goodiebagStatusValue.className = "error-text";
         } else if (data.hasGoodieBag) {
-            goodiebagStatusValue.textContent = `Already received at ${formatDateTime(data.goodieBagTime)}`;
+            goodiebagStatusValue.textContent = `⚠️ Already received at ${formatDateTime(data.goodieBagTime)}`;
             goodiebagStatusValue.className = "warning-text";
         } else {
-            goodiebagStatusValue.textContent = "Not received yet";
-            goodiebagStatusValue.className = "success-text";
+            if (currentMode === 'Goodie Bag' && isGoodieBagEligible(data.code)) {
+                goodiebagStatusValue.textContent = "✅ First time goodie bag!";
+                goodiebagStatusValue.className = "success-text";
+            } else {
+                goodiebagStatusValue.textContent = "Not received yet";
+                goodiebagStatusValue.className = "success-text";
+            }
         }
         
-        // Update contest status
+        // Update contest status - show first time message for current mode
         if (data.inContest) {
-            contestStatusValue.textContent = `Already entered at ${formatDateTime(data.contestTime)}`;
+            contestStatusValue.textContent = `⚠️ Already entered at ${formatDateTime(data.contestTime)}`;
             contestStatusValue.className = "warning-text";
         } else {
-            contestStatusValue.textContent = "Not entered yet";
-            contestStatusValue.className = "success-text";
+            if (currentMode === 'Contest') {
+                contestStatusValue.textContent = "✅ First time contest entry!";
+                contestStatusValue.className = "success-text";
+            } else {
+                contestStatusValue.textContent = "Not entered yet";
+                contestStatusValue.className = "success-text";
+            }
         }
         
         // Highlight the current mode status
